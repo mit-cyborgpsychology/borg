@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PersonTaskCount } from '../../types/task';
-	import { peopleService } from '../../services/instances';
+	import { getPersonCached } from '../../stores/peopleCache.svelte';
 
 	interface Props {
 		personTaskCount: PersonTaskCount;
@@ -8,15 +8,7 @@
 	}
 
 	let { personTaskCount, onclick }: Props = $props();
-	let person = $state<any>(null);
-
-	// Load person data
-	$effect(() => {
-		(async () => {
-			const result = peopleService.getPerson(personTaskCount.personId);
-			person = result instanceof Promise ? await result : result;
-		})();
-	});
+	let person = $derived(getPersonCached(personTaskCount.personId));
 </script>
 
 <button

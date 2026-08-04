@@ -1,110 +1,34 @@
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
 	import { CircleDashed, PencilRuler, CheckCircle, Shield } from '@lucide/svelte';
-	import { peopleService } from '../services/instances';
+	import { getPersonCached } from '../stores/peopleCache.svelte';
 	import type { Person } from '$lib/types/people';
 
 	let { data, id } = $props<{ data: any; id: string }>();
 
 	let nodeData = $derived(data.nodeData || {});
 
-	// Collaborator data
-	let collaboratorsData = $state<Person[]>([]);
-
-	// Fetch collaborator data when collaborators change (with caching)
-	$effect(() => {
+	// Collaborator data — reads from the shared people cache (one fetch per
+	// unique person ID across the whole app, not per-node), falling back to
+	// a placeholder (ID as name) for any collaborator the cache can't resolve.
+	let collaboratorsData = $derived.by(() => {
 		const collaboratorIds = nodeData.collaborators;
-		const projectSlug = nodeData.projectSlug;
+		if (!collaboratorIds || !Array.isArray(collaboratorIds)) return [];
 
-		if (!collaboratorIds || !Array.isArray(collaboratorIds) || collaboratorIds.length === 0) {
-			collaboratorsData = [];
-			return;
-		}
-
-		(async () => {
-			try {
-				const fetchedCollaborators: Person[] = [];
-				const cacheTimeout = 300000; // 5 minutes cache for people data
-
-				for (const collaboratorId of collaboratorIds) {
-					if (typeof collaboratorId === 'string') {
-						// Check cache first
-						const cacheKey = `person-${collaboratorId}-${projectSlug || 'global'}`;
-						const cached = sessionStorage.getItem(cacheKey);
-
-						let person: Person | null = null;
-
-						if (cached) {
-							try {
-								const { data: cachedPerson, timestamp } = JSON.parse(cached);
-								if (Date.now() - timestamp < cacheTimeout) {
-									person = cachedPerson;
-								}
-							} catch (e) {
-								// Invalid cache, proceed to fetch
-							}
-						}
-
-						// Fetch if not in cache
-						if (!person) {
-							// Try to get person by ID, first from project scope then global
-							person = await peopleService.getPerson(collaboratorId, projectSlug);
-							if (!person) {
-								person = await peopleService.getPerson(collaboratorId);
-							}
-
-							// Cache the result
-							if (person) {
-								sessionStorage.setItem(
-									cacheKey,
-									JSON.stringify({
-										data: person,
-										timestamp: Date.now()
-									})
-								);
-							}
-						}
-
-						if (person) {
-							fetchedCollaborators.push(person);
-						} else {
-							// Fallback: create a placeholder person with the ID as name
-							const placeholder = {
-								id: collaboratorId,
-								name: collaboratorId,
-								email: undefined,
-								photoUrl: undefined,
-								createdAt: new Date().toISOString(),
-								updatedAt: new Date().toISOString()
-							};
-							fetchedCollaborators.push(placeholder);
-
-							// Cache the placeholder too to avoid repeated failures
-							sessionStorage.setItem(
-								cacheKey,
-								JSON.stringify({
-									data: placeholder,
-									timestamp: Date.now()
-								})
-							);
-						}
-					}
-				}
-
-				collaboratorsData = fetchedCollaborators;
-			} catch (error) {
-				console.error('Failed to fetch collaborator data:', error);
-				// Fallback: use collaborator IDs as names
-				collaboratorsData = collaboratorIds.map((id: string) => ({
-					id,
-					name: id,
+		return collaboratorIds
+			.filter((collaboratorId: unknown): collaboratorId is string => typeof collaboratorId === 'string')
+			.map((collaboratorId: string): Person => {
+				const cached = getPersonCached(collaboratorId, nodeData.projectSlug);
+				if (cached) return cached;
+				return {
+					id: collaboratorId,
+					name: collaboratorId,
 					email: undefined,
 					photoUrl: undefined,
 					createdAt: new Date().toISOString(),
 					updatedAt: new Date().toISOString()
-				}));
-			}
-		})();
+				};
+			});
 	});
 
 	// Helper function to get initials from name

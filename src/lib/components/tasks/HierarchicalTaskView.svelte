@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { Calendar, CheckCircle, Trash2, RotateCcw, Loader2, ExternalLink } from '@lucide/svelte';
 	import type { TaskWithContext } from '../../types/task';
-	import type { IPeopleService } from '../../services/interfaces/IPeopleService';
+	import { getPersonCached } from '../../stores/peopleCache.svelte';
 
 	let {
 		tasks,
-		peopleService,
 		showActions = false,
 		isResolved = false,
 		onResolveTask,
@@ -14,7 +13,6 @@
 		groupByProject = true
 	} = $props<{
 		tasks: TaskWithContext[];
-		peopleService?: IPeopleService;
 		showActions?: boolean;
 		isResolved?: boolean;
 		onResolveTask?: (task: TaskWithContext) => void;
@@ -235,28 +233,9 @@
 							<!-- Tasks under this node -->
 							<div class="space-y-1">
 								{#each nodeData.tasks as task}
-									{@const personResult = peopleService?.getPerson(task.assignee)}
+									{@const person = getPersonCached(task.assignee)}
 									{@const isLoading = loadingTasks.has(task.id)}
-									{#await personResult instanceof Promise ? personResult : Promise.resolve(personResult)}
-										<!-- Loading state for person data -->
-										<div class="group flex items-start gap-3 rounded-md px-3 py-2 opacity-60">
-											<div class="flex items-center pt-0.5">
-												<div class="h-4 w-4 rounded border border-zinc-300"></div>
-											</div>
-											<div class="min-w-0 flex-1">
-												<div class="mb-1 flex items-center gap-2">
-													<span class="text-sm text-zinc-900">
-														{task.title}
-													</span>
-													<div class="h-5 w-5 animate-pulse rounded-full bg-zinc-200"></div>
-												</div>
-												<div class="flex items-center gap-3 text-xs text-zinc-500">
-													<div class="h-3 w-12 animate-pulse rounded bg-zinc-200"></div>
-												</div>
-											</div>
-										</div>
-									{:then person}
-										{@const overdue = task.dueDate && isOverdue(task.dueDate)}
+									{@const overdue = task.dueDate && isOverdue(task.dueDate)}
 
 										<div
 											class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
@@ -314,7 +293,7 @@
 													>
 														{task.title}
 													</span>
-													{#if peopleService && person?.photoUrl}
+													{#if person?.photoUrl}
 														<img
 															src={person.photoUrl}
 															alt={person.name || 'Assignee'}
@@ -358,8 +337,7 @@
 												</div>
 											{/if}
 										</div>
-									{/await}
-								{/each}
+									{/each}
 							</div>
 						</div>
 					{/each}
@@ -389,28 +367,9 @@
 					</h3>
 					<div class="space-y-1">
 						{#each timePeriods.recent as task}
-							{@const personResult = peopleService?.getPerson(task.assignee)}
+							{@const person = getPersonCached(task.assignee)}
 							{@const isLoading = loadingTasks.has(task.id)}
-							{#await personResult instanceof Promise ? personResult : Promise.resolve(personResult)}
-								<!-- Loading state for person data -->
-								<div class="group flex items-start gap-3 rounded-md px-3 py-2 opacity-60">
-									<div class="flex items-center pt-0.5">
-										<div class="h-4 w-4 rounded border border-zinc-300"></div>
-									</div>
-									<div class="min-w-0 flex-1">
-										<div class="mb-1 flex items-center gap-2">
-											<span class="text-sm text-zinc-900">
-												{task.title}
-											</span>
-											<div class="h-5 w-5 animate-pulse rounded-full bg-zinc-200"></div>
-										</div>
-										<div class="flex items-center gap-3 text-xs text-zinc-500">
-											<div class="h-3 w-12 animate-pulse rounded bg-zinc-200"></div>
-										</div>
-									</div>
-								</div>
-							{:then person}
-								{@const overdue = task.dueDate && isOverdue(task.dueDate)}
+							{@const overdue = task.dueDate && isOverdue(task.dueDate)}
 
 								<div
 									class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
@@ -507,39 +466,6 @@
 										</div>
 									{/if}
 								</div>
-							{:catch error}
-								<!-- Error state for person data -->
-								<div class="group flex items-start gap-3 rounded-md px-3 py-2 opacity-75">
-									<div class="flex items-center pt-0.5">
-										<div class="h-4 w-4 rounded border border-zinc-300 bg-green-500"></div>
-									</div>
-									<div class="min-w-0 flex-1">
-										<div class="mb-1 flex items-center gap-2">
-											<span class="text-sm text-zinc-900">
-												{task.title}
-											</span>
-											<span class="text-xs text-zinc-500">
-												{task.projectTitle} • {task.nodeTitle}
-											</span>
-										</div>
-										<div class="flex items-center gap-3 text-xs text-zinc-500">
-											<span>Error loading assignee</span>
-											{#if task.updatedAt}
-												<div class="flex items-center gap-1">
-													<Calendar class="h-3 w-3" />
-													<span>Resolved {formatDate(task.updatedAt)}</span>
-												</div>
-											{/if}
-											{#if task.dueDate}
-												<div class="flex items-center gap-1">
-													<Calendar class="h-3 w-3" />
-													<span>Due {formatDate(task.dueDate)}</span>
-												</div>
-											{/if}
-										</div>
-									</div>
-								</div>
-							{/await}
 						{/each}
 					</div>
 				</div>
@@ -552,28 +478,9 @@
 					</h3>
 					<div class="space-y-1">
 						{#each timePeriods.older as task}
-							{@const personResult = peopleService?.getPerson(task.assignee)}
+							{@const person = getPersonCached(task.assignee)}
 							{@const isLoading = loadingTasks.has(task.id)}
-							{#await personResult instanceof Promise ? personResult : Promise.resolve(personResult)}
-								<!-- Loading state for person data -->
-								<div class="group flex items-start gap-3 rounded-md px-3 py-2 opacity-60">
-									<div class="flex items-center pt-0.5">
-										<div class="h-4 w-4 rounded border border-zinc-300"></div>
-									</div>
-									<div class="min-w-0 flex-1">
-										<div class="mb-1 flex items-center gap-2">
-											<span class="text-sm text-zinc-900">
-												{task.title}
-											</span>
-											<div class="h-5 w-5 animate-pulse rounded-full bg-zinc-200"></div>
-										</div>
-										<div class="flex items-center gap-3 text-xs text-zinc-500">
-											<div class="h-3 w-12 animate-pulse rounded bg-zinc-200"></div>
-										</div>
-									</div>
-								</div>
-							{:then person}
-								{@const overdue = task.dueDate && isOverdue(task.dueDate)}
+							{@const overdue = task.dueDate && isOverdue(task.dueDate)}
 
 								<div
 									class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
@@ -670,39 +577,6 @@
 										</div>
 									{/if}
 								</div>
-							{:catch error}
-								<!-- Error state for person data -->
-								<div class="group flex items-start gap-3 rounded-md px-3 py-2 opacity-75">
-									<div class="flex items-center pt-0.5">
-										<div class="h-4 w-4 rounded border border-zinc-300 bg-green-500"></div>
-									</div>
-									<div class="min-w-0 flex-1">
-										<div class="mb-1 flex items-center gap-2">
-											<span class="text-sm text-zinc-900">
-												{task.title}
-											</span>
-											<span class="text-xs text-zinc-500">
-												{task.projectTitle} • {task.nodeTitle}
-											</span>
-										</div>
-										<div class="flex items-center gap-3 text-xs text-zinc-500">
-											<span>Error loading assignee</span>
-											{#if task.updatedAt}
-												<div class="flex items-center gap-1">
-													<Calendar class="h-3 w-3" />
-													<span>Resolved {formatDate(task.updatedAt)}</span>
-												</div>
-											{/if}
-											{#if task.dueDate}
-												<div class="flex items-center gap-1">
-													<Calendar class="h-3 w-3" />
-													<span>Due {formatDate(task.dueDate)}</span>
-												</div>
-											{/if}
-										</div>
-									</div>
-								</div>
-							{/await}
 						{/each}
 					</div>
 				</div>

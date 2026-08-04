@@ -2,20 +2,18 @@
 	import { onMount } from 'svelte';
 	import { CheckSquare } from '@lucide/svelte';
 	import type { ITaskService } from '../../services/interfaces/ITaskService';
-	import type { IPeopleService } from '../../services/interfaces/IPeopleService';
 	import type { Task, TaskWithContext } from '../../types/task';
 	import { goto } from '$app/navigation';
 	import HierarchicalTaskView from '../tasks/HierarchicalTaskView.svelte';
 	import { authStore } from '../../stores/authStore';
 	import { projectsService } from '../../services/instances';
+	import { getPersonCached } from '../../stores/peopleCache.svelte';
 
 	let {
 		taskService,
-		peopleService,
 		activeTab: currentTab
 	} = $props<{
 		taskService: ITaskService;
-		peopleService: IPeopleService;
 		activeTab: string;
 	}>();
 
@@ -84,8 +82,7 @@
 
 				let personMatch = false;
 				if (task.assignee) {
-					const result = peopleService.getPerson(task.assignee);
-					const person = result instanceof Promise ? await result : result;
+					const person = getPersonCached(task.assignee);
 					personMatch = person?.name.toLowerCase().includes(query) || false;
 				}
 
@@ -198,7 +195,6 @@
 		{#if viewTab === 'active'}
 			<HierarchicalTaskView
 				tasks={filteredActiveTasks}
-				{peopleService}
 				showActions={true}
 				isResolved={false}
 				onResolveTask={handleResolveTask}
@@ -207,7 +203,6 @@
 		{:else}
 			<HierarchicalTaskView
 				tasks={filteredResolvedTasks}
-				{peopleService}
 				showActions={true}
 				isResolved={true}
 				onReactivateTask={handleReactivateTask}

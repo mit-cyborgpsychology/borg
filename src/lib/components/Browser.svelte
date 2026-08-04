@@ -194,7 +194,7 @@
 			{:else if activeTab === 'timeline'}
 				<TimelineTab {timelineService} {activeTab} />
 			{:else if activeTab === 'tasks'}
-				<TaskTab {taskService} {peopleService} {activeTab} />
+				<TaskTab {taskService} {activeTab} />
 			{:else if activeTab === 'personal'}
 				<PersonalTab {taskService} {activeTab} />
 			{:else if activeTab === 'docs'}
