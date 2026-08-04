@@ -627,7 +627,9 @@
 		}
 
 		// ── Image file drop ───────────────────────────────────────────────────
-		const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => f.type.startsWith('image/'));
+		const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
+			f.type.startsWith('image/')
+		);
 		if (files.length === 0) return;
 
 		canvasUploading = true;
@@ -933,10 +935,16 @@
 				aria-label="Projects canvas"
 			>
 				{#if canvasDragOver || canvasUploading}
-					<div class="pointer-events-none absolute inset-0 z-50 flex items-center justify-center border-2 border-dashed border-white/60 bg-black/30">
-						<div class="flex flex-col items-center gap-2 text-sm font-medium text-white drop-shadow">
+					<div
+						class="pointer-events-none absolute inset-0 z-50 flex items-center justify-center border-2 border-dashed border-white/60 bg-black/30"
+					>
+						<div
+							class="flex flex-col items-center gap-2 text-sm font-medium text-white drop-shadow"
+						>
 							{#if canvasUploading}
-								<div class="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+								<div
+									class="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+								></div>
 								<span>Uploading...</span>
 							{:else}
 								<span>Drop to add to canvas</span>
@@ -966,6 +974,7 @@
 					deleteKey={['Delete', 'Backspace']}
 					panOnDrag={false}
 					panOnScroll={true}
+					panOnScrollSpeed={1}
 					zoomOnScroll={false}
 					zoomOnPinch={true}
 				>
