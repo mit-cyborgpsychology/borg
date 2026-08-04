@@ -8,6 +8,23 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isApproved == true;
     }
 
+    // Members can access every project; collaborators only the ones
+    // they're listed on. This mirrors the client-side filter that already
+    // existed in FirebaseProjectsService (getAllProjects/subscribeToProjects)
+    // — moving it into the rules means it now actually holds against a
+    // direct SDK/API call, not just through the app's own UI.
+    function isMember() {
+      return isApprovedUser() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'member';
+    }
+
+    function isCollaboratorOnProject(projectData) {
+      return isApprovedUser() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'collaborator' &&
+        projectData.collaborators is list &&
+        projectData.collaborators.hasAny([request.auth.uid]);
+    }
+
     // Users can read/update their own profile, approved users can read others
     // Approved users can also approve other users (update isApproved field)
     match /users/{userId} {
@@ -18,27 +35,23 @@ service cloud.firestore {
       	request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isApproved', 'approvedAt', 'userType', 'updatedAt']);
     }
 
-    // All data accessible to approved users only
     match /projects/{projectId} {
-      allow read, write, create, delete: if isApprovedUser();
-      
+      // Creation is member-only — the UI already hides project creation from
+      // collaborators (ProjectsTab.svelte), this makes it a real boundary.
+      allow create: if isMember();
+      allow read, write, delete: if isMember() || isCollaboratorOnProject(resource.data);
+
       match /nodes/{nodeId} {
-        allow read, write, create, delete: if isApprovedUser();
+        allow read, write, create, delete: if isMember() ||
+          isCollaboratorOnProject(get(/databases/$(database)/documents/projects/$(projectId)).data);
       }
-      
+
       match /edges/{edgeId} {
-        allow read, write, create, delete: if isApprovedUser();
-      }
-      
-      match /people/{personId} {
-        allow read, write, create, delete: if isApprovedUser();
-      }
-      
-      match /timeline/{eventId} {
-        allow read, write, create, delete: if isApprovedUser();
+        allow read, write, create, delete: if isMember() ||
+          isCollaboratorOnProject(get(/databases/$(database)/documents/projects/$(projectId)).data);
       }
     }
-    
+
     match /recycle-bin/{projectId} {
     	allow read, write, create, delete: if isApprovedUser();
 
@@ -50,11 +63,6 @@ service cloud.firestore {
 
     // Global tasks collection
     match /tasks/{taskId} {
-      allow read, write, create, delete: if isApprovedUser();
-    }
-
-    // Global people index (for autocomplete)
-    match /people/{personId} {
       allow read, write, create, delete: if isApprovedUser();
     }
 
