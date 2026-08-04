@@ -204,7 +204,7 @@
 				<div class="min-w-0 flex-1">
 					<div class="flex items-center gap-1">
 						{#if isEditingName}
-							<input bind:value={personalData.preferredName} type="text" placeholder={initialData.preferredName || 'Your preferred name'} class="border-b border-zinc-500 bg-transparent px-0 text-sm font-medium text-zinc-800 focus:outline-none" onfocus={(e) => e.target.select()} />
+							<input bind:value={personalData.preferredName} type="text" placeholder={initialData.preferredName || 'Your preferred name'} class="border-b border-zinc-500 bg-transparent px-0 text-sm font-medium text-zinc-800 focus:outline-none" onfocus={(e) => e.currentTarget.select()} />
 							<button onclick={() => { isEditingName = false; savePersonalData(); }} class="p-0.5 text-green-600"><Check class="h-3.5 w-3.5" /></button>
 							<button onclick={() => { isEditingName = false; personalData.preferredName = initialData.preferredName; }} class="p-0.5 text-red-500"><X class="h-3.5 w-3.5" /></button>
 						{:else}

@@ -6,14 +6,12 @@
 	} from '../../types/timeline';
 	import FieldRenderer from '../fields/FieldRenderer.svelte';
 
-	interface Props {
+	let { onAdd, onClose, editingEvent = undefined, onUpdate = undefined } = $props<{
 		onAdd: (templateType: string, eventData: Record<string, any>) => void;
 		onClose: () => void;
 		editingEvent?: TimelineEvent;
 		onUpdate?: (id: string, templateType: string, eventData: Record<string, any>) => void;
-	}
-
-	let { onAdd, onClose, editingEvent = undefined, onUpdate = undefined } = $props<Props>();
+	}>();
 
 	let selectedTemplateType = $state(editingEvent?.templateType || 'event');
 	let isLoading = $state(false);
@@ -101,7 +99,7 @@
 			<form onsubmit={handleSubmit} class="space-y-6">
 				<!-- Event Type Selection -->
 				<div>
-					<label class="mb-3 block text-sm font-medium text-zinc-700"> Event Type </label>
+					<span class="mb-3 block text-sm font-medium text-zinc-700"> Event Type </span>
 					<div class="grid grid-cols-2 gap-3">
 						{#each templates as template}
 							<button

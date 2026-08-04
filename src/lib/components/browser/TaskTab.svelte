@@ -47,11 +47,11 @@
 			const userProjects = await projectsService.getAllProjects(); // This already filters for collaborators
 			const projectSlugs = userProjects.map(p => p.slug);
 			
-			allActiveTasks = allActiveTasks.filter(task => 
+			allActiveTasks = allActiveTasks.filter((task: TaskWithContext) =>
 				task.projectSlug && projectSlugs.includes(task.projectSlug)
 			);
-			
-			allResolvedTasks = allResolvedTasks.filter(task => 
+
+			allResolvedTasks = allResolvedTasks.filter((task: TaskWithContext) =>
 				task.projectSlug && projectSlugs.includes(task.projectSlug)
 			);
 		}

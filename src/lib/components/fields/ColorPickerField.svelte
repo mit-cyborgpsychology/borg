@@ -15,9 +15,9 @@
 </script>
 
 <div class="field-container">
-	<label class="mb-1 block text-sm font-medium text-zinc-600">
+	<span class="mb-1 block text-sm font-medium text-zinc-600">
 		{field.label}
-	</label>
+	</span>
 
 	{#if mode === 'display'}
 		{#if value}

@@ -93,7 +93,8 @@
 			workingNodes.forEach((node) => {
 				if (node.data) {
 					// Set draggable property based on lock state - locked nodes can't be dragged
-					node.draggable = !(node.data.nodeData && node.data.nodeData.locked);
+					const nodeData = node.data.nodeData as Record<string, unknown> | undefined;
+					node.draggable = !(nodeData && nodeData.locked);
 				}
 			});
 		}
@@ -114,7 +115,9 @@
 	// Selection state
 	let selectedNodes = $state<Node[]>([]);
 	let selectedNodesWithStatus = $derived(
-		selectedNodes.filter((node) => node.data?.nodeData?.status !== undefined)
+		selectedNodes.filter(
+			(node) => (node.data?.nodeData as Record<string, unknown> | undefined)?.status !== undefined
+		)
 	);
 
 	// Search functionality
@@ -219,7 +222,7 @@
 
 		for (const node of selectedNodesWithStatus) {
 			const updatedNodeData = {
-				...node.data.nodeData,
+				...(node.data.nodeData as Record<string, unknown>),
 				status: 'Done'
 			};
 
@@ -278,6 +281,8 @@
 
 		// Update existing project nodes with fresh data while preserving order
 		const orderedUpdatedProjectNodes: Node[] = [];
+		// Plain local bookkeeping inside a function body, never read reactively.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const processedIds = new Set<string>();
 
 		// First, add existing project nodes in their current order (if they still exist in projects)
@@ -301,9 +306,13 @@
 		}
 
 		// Sort canvas nodes by Firebase's updatedAt timestamp (most recent last = on top)
+		// updatedAt is extra metadata FirebaseNodesService.subscribeToNodes attaches
+		// beyond the base xyflow Node shape, not part of its declared type.
 		const sortedCanvasNodes = nonProjectCanvasNodes.sort((a, b) => {
-			const aTime = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
-			const bTime = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+			const aUpdatedAt = (a as Node & { updatedAt?: { toMillis?: () => number } }).updatedAt;
+			const bUpdatedAt = (b as Node & { updatedAt?: { toMillis?: () => number } }).updatedAt;
+			const aTime = aUpdatedAt?.toMillis ? aUpdatedAt.toMillis() : 0;
+			const bTime = bUpdatedAt?.toMillis ? bUpdatedAt.toMillis() : 0;
 			return aTime - bTime;
 		});
 
@@ -600,7 +609,7 @@
 	}
 
 	function handleCanvasDragLeave(e: DragEvent) {
-		if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+		if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as globalThis.Node)) {
 			canvasDragOver = false;
 		}
 	}
@@ -880,7 +889,11 @@
 							onkeydown={(e) => {
 								if (e.key === 'Enter') {
 									e.preventDefault();
-									e.shiftKey ? previousMatch() : nextMatch();
+									if (e.shiftKey) {
+										previousMatch();
+									} else {
+										nextMatch();
+									}
 								}
 							}}
 							placeholder="Search nodes..."
@@ -899,6 +912,7 @@
 							onclick={previousMatch}
 							class="rounded border border-zinc-200 bg-white p-1.5 text-zinc-600 shadow-sm hover:bg-zinc-50"
 							title="Previous (Shift+Enter)"
+							aria-label="Previous match"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -918,6 +932,7 @@
 							onclick={nextMatch}
 							class="rounded border border-zinc-200 bg-white p-1.5 text-zinc-600 shadow-sm hover:bg-zinc-50"
 							title="Next (Enter)"
+							aria-label="Next match"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -1012,7 +1027,6 @@
 				nodeId={editNodeId}
 				nodeData={editNodeData}
 				templateType={editTemplateType}
-				bind:isOpen={showEditPanel}
 				onSave={handleEditPanelSave}
 				onDelete={handleEditPanelDelete}
 			/>

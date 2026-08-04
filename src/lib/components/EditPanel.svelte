@@ -3,7 +3,8 @@
 		getTemplate,
 		getSuggestedFields,
 		type NodeTemplate,
-		type TemplateField
+		type TemplateField,
+		type CustomField
 	} from '../templates';
 	import FieldRenderer from './fields/FieldRenderer.svelte';
 	import CustomFieldManager from './fields/CustomFieldManager.svelte';
@@ -26,7 +27,7 @@
 
 	let template: NodeTemplate = $derived(getTemplate(templateType || 'blank'));
 	let editableData = $state({ ...nodeData });
-	let customFields = $state<TemplateField[]>([]);
+	let customFields = $state<(TemplateField | CustomField)[]>([]);
 	let isProjectMetadata = $derived(templateType === 'project');
 	let suggestedFields = $derived(getSuggestedFields(templateType || 'blank'));
 
@@ -161,7 +162,7 @@
 		<!-- Lock toggle for all nodes -->
 		<div class="border-y border-zinc-100 py-3">
 			<div class="flex items-center justify-between">
-				<label class="text-xs font-medium text-zinc-600">Lock Position</label>
+				<span class="text-xs font-medium text-zinc-600">Lock Position</span>
 				<button
 					type="button"
 					class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none {editableData.locked
@@ -186,7 +187,7 @@
 			<div class="border-b border-zinc-100 pb-3">
 				<div class="flex items-center justify-between">
 					<div>
-						<label class="text-xs font-medium text-zinc-600">Countdown Mode</label>
+						<span class="text-xs font-medium text-zinc-600">Countdown Mode</span>
 						<p class="text-xs text-zinc-400">Show name and countdown timer only</p>
 					</div>
 					<button

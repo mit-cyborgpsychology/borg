@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { Plus, X } from '@lucide/svelte';
-	import type { TemplateField } from '../../templates';
+	import type { TemplateField, CustomField } from '../../templates';
 
 	let { customFields = $bindable(), nodeData = $bindable() } = $props<{
-		customFields: TemplateField[];
+		customFields: (TemplateField | CustomField)[];
 		nodeData: Record<string, any>;
 	}>();
 
@@ -54,7 +54,7 @@
 	}
 
 	function removeCustomField(fieldId: string) {
-		customFields = customFields.filter((f) => f.id !== fieldId);
+		customFields = customFields.filter((f: TemplateField | CustomField) => f.id !== fieldId);
 		// Remove the field data
 		delete nodeData[fieldId];
 		nodeData = { ...nodeData }; // Trigger reactivity
@@ -87,8 +87,11 @@
 		<div class="mb-3 rounded-lg border border-zinc-200 bg-borg-brown p-3">
 			<div class="space-y-3">
 				<div>
-					<label class="mb-1 block text-xs font-medium text-zinc-300"> Field Label </label>
+					<label class="mb-1 block text-xs font-medium text-zinc-300" for="custom-field-label">
+						Field Label
+					</label>
 					<input
+						id="custom-field-label"
 						bind:value={newFieldLabel}
 						type="text"
 						placeholder="Enter field name..."
@@ -99,8 +102,11 @@
 				</div>
 
 				<div>
-					<label class="mb-1 block text-xs font-medium text-black"> Field Type </label>
+					<label class="mb-1 block text-xs font-medium text-black" for="custom-field-type">
+						Field Type
+					</label>
 					<select
+						id="custom-field-type"
 						bind:value={newFieldType}
 						class="w-full rounded border border-zinc-200 bg-white px-2 py-1 text-sm text-black focus:border-borg-blue focus:outline-none"
 					>

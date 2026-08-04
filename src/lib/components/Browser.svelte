@@ -35,7 +35,7 @@
 	});
 
 	// Shared per-page-load service - the rest are app-wide singletons imported directly
-	let timelineService: ITimelineService;
+	let timelineService: ITimelineService = $state()!;
 
 	let globalCounts = $state({ todo: 0, doing: 0, done: 0 });
 	let servicesInitialized = $state(false);

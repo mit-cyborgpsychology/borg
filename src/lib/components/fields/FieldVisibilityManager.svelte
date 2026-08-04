@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Eye, EyeOff } from '@lucide/svelte';
-	import type { TemplateField } from '../../templates';
+	import type { TemplateField, CustomField } from '../../templates';
 
 	let {
 		templateFields,
@@ -8,14 +8,14 @@
 		nodeData = $bindable()
 	} = $props<{
 		templateFields: TemplateField[];
-		customFields: TemplateField[];
+		customFields: (TemplateField | CustomField)[];
 		nodeData: Record<string, any>;
 	}>();
 
 	function toggleFieldVisibility(fieldId: string, isCustom: boolean = false) {
 		if (isCustom) {
 			// Update custom field visibility
-			const fieldIndex = customFields.findIndex((f) => f.id === fieldId);
+			const fieldIndex = customFields.findIndex((f: TemplateField | CustomField) => f.id === fieldId);
 			if (fieldIndex !== -1) {
 				const currentVisibility = customFields[fieldIndex].showInDisplay ?? true;
 				customFields[fieldIndex].showInDisplay = !currentVisibility;
@@ -27,7 +27,7 @@
 				nodeData.fieldVisibility = {};
 			}
 			// Get the template field to check its default
-			const templateField = templateFields.find((f) => f.id === fieldId);
+			const templateField = templateFields.find((f: TemplateField) => f.id === fieldId);
 			const currentVisibility =
 				nodeData.fieldVisibility[fieldId] ?? templateField?.showInDisplay ?? true;
 			nodeData.fieldVisibility[fieldId] = !currentVisibility;
@@ -46,8 +46,12 @@
 	}
 
 	let allFields = $derived([
-		...templateFields.filter((f) => f.id !== 'status').map((f) => ({ ...f, isCustom: false })),
-		...customFields.filter((f) => f.id !== 'status').map((f) => ({ ...f, isCustom: true }))
+		...templateFields
+			.filter((f: TemplateField) => f.id !== 'status')
+			.map((f: TemplateField) => ({ ...f, isCustom: false })),
+		...customFields
+			.filter((f: TemplateField | CustomField) => f.id !== 'status')
+			.map((f: TemplateField | CustomField) => ({ ...f, isCustom: true }))
 	]);
 </script>
 

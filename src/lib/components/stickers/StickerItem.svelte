@@ -12,15 +12,17 @@
 	let imageError = $state(false);
 
 	// Load the image URL when component mounts
-	$effect(async () => {
-		try {
-			console.log(`🎨 Loading URL for ${category}/${sticker.filename}`);
-			imageUrl = await stickerService.getStickerDownloadUrl(category, sticker.filename);
-			console.log(`✅ Got URL for ${sticker.filename}:`, imageUrl);
-		} catch (error) {
-			console.error(`❌ Failed to get sticker URL for ${sticker.filename}:`, error);
-			imageError = true;
-		}
+	$effect(() => {
+		(async () => {
+			try {
+				console.log(`🎨 Loading URL for ${category}/${sticker.filename}`);
+				imageUrl = await stickerService.getStickerDownloadUrl(category, sticker.filename);
+				console.log(`✅ Got URL for ${sticker.filename}:`, imageUrl);
+			} catch (error) {
+				console.error(`❌ Failed to get sticker URL for ${sticker.filename}:`, error);
+				imageError = true;
+			}
+		})();
 	});
 
 	function handleImageLoad() {
@@ -56,7 +58,16 @@
 
 <div
 	class="sticker-item group relative cursor-grab hover:bg-gray-100 rounded-lg p-1 transition-colors"
+	role="button"
+	tabindex="0"
+	aria-label="Add {sticker.name} sticker"
 	onclick={handleClick}
+	onkeydown={(e) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			handleClick();
+		}
+	}}
 	draggable={!!imageUrl}
 	ondragstart={handleDragStart}
 >

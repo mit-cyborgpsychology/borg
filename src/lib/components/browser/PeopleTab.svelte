@@ -41,7 +41,9 @@
 			name: user.name,
 			email: user.email,
 			photoUrl: user.photoUrl,
-			userType: user.userType
+			userType: user.userType,
+			createdAt: typeof user.createdAt === 'string' ? user.createdAt : user.createdAt.toISOString(),
+			updatedAt: typeof user.lastLoginAt === 'string' ? user.lastLoginAt : user.lastLoginAt.toISOString()
 		}));
 
 		// Load task counts for each person
@@ -287,7 +289,11 @@
 							<div class="flex items-center gap-2">
 								<select
 									value={approvalUserTypes.get(user.id) || 'member'}
-									onchange={(e) => handleUserTypeChange(user.id, e.currentTarget.value)}
+									onchange={(e) =>
+										handleUserTypeChange(
+											user.id,
+											e.currentTarget.value as 'member' | 'collaborator'
+										)}
 									class="rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700"
 								>
 									<option value="member">Member</option>

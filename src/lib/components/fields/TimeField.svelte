@@ -26,7 +26,7 @@
 	];
 
 	let showTimeOptions = $state(false);
-	let timeInput: HTMLInputElement;
+	let timeInput: HTMLInputElement = $state()!;
 
 	function selectTime(time: string) {
 		value = time;

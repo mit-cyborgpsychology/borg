@@ -87,10 +87,11 @@
 			<div class="py-1 text-black">-</div>
 		{/if}
 	{:else}
-		<label class="mb-1 block text-sm font-medium text-zinc-600">
+		<label class="mb-1 block text-sm font-medium text-zinc-600" for={field.id}>
 			{field.label}
 		</label>
 		<input
+			id={field.id}
 			type="url"
 			bind:value
 			placeholder="Enter URL..."

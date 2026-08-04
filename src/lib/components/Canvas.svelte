@@ -73,7 +73,8 @@
 				if (node.data) {
 					node.data.isBeingEdited = showEditPanel && editNodeId === node.id;
 					// Set draggable property based on lock state - locked nodes can't be dragged
-					node.draggable = !(node.data.nodeData && node.data.nodeData.locked);
+					const nodeData = node.data.nodeData as Record<string, unknown> | undefined;
+					node.draggable = !(nodeData && nodeData.locked);
 				}
 			});
 		}
@@ -138,7 +139,9 @@
 	);
 	let allSelectedDone = $derived(
 		selectedNodesWithStatus.length > 0 &&
-			selectedNodesWithStatus.every((n) => n.data?.nodeData?.status === 'Done')
+			selectedNodesWithStatus.every(
+				(n) => (n.data?.nodeData as Record<string, unknown> | undefined)?.status === 'Done'
+			)
 	);
 
 	// Project sync optimization
@@ -691,7 +694,7 @@
 	}
 
 	function handleCanvasDragLeave(e: DragEvent) {
-		if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+		if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as globalThis.Node)) {
 			canvasDragOver = false;
 		}
 	}
@@ -1214,9 +1217,15 @@
 
 	// Get display label for a node in the node list
 	function getNodeLabel(node: Node): string {
-		const nd = node.data?.nodeData;
-		const type = node.data?.templateType;
-		return nd?.title || nd?.name || (nd?.content as string)?.slice?.(0, 40) || type || 'Untitled';
+		const nd = node.data?.nodeData as Record<string, unknown> | undefined;
+		const type = node.data?.templateType as string | undefined;
+		return (
+			(nd?.title as string) ||
+			(nd?.name as string) ||
+			(nd?.content as string)?.slice?.(0, 40) ||
+			type ||
+			'Untitled'
+		);
 	}
 
 	// Focus a node in the viewport and open its inspector
@@ -1266,8 +1275,6 @@
 	);
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- svelte-ignore a11y_click_events_have_key_events -->
 <svelte:window on:keydown={handleKeyDown} />
 
 <!-- Canvas and Sidebar Container -->
@@ -1438,7 +1445,11 @@
 							oninput={updateMatchingNodes}
 							onkeydown={(e) => {
 								if (e.key === 'Enter') {
-									e.shiftKey ? previousMatch() : nextMatch();
+									if (e.shiftKey) {
+										previousMatch();
+									} else {
+										nextMatch();
+									}
 								}
 							}}
 							placeholder="Search nodes..."
@@ -1452,6 +1463,7 @@
 								onclick={previousMatch}
 								class="rounded p-1 text-zinc-500 hover:bg-zinc-100"
 								title="Previous (Shift+Enter)"
+								aria-label="Previous match"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -1469,6 +1481,7 @@
 								onclick={nextMatch}
 								class="rounded p-1 text-zinc-500 hover:bg-zinc-100"
 								title="Next (Enter)"
+								aria-label="Next match"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -1495,10 +1508,10 @@
 						<p class="p-4 text-center text-xs text-zinc-400">No active tasks</p>
 					{:else}
 						<div class="space-y-3 p-2">
-							{#each Object.entries(sidebarTasksByNode) as [, nodeGroup]}
+							{#each Object.entries(sidebarTasksByNode) as [nodeId, nodeGroup] (nodeId)}
 								<div>
 									<p class="mb-1 px-1 text-xs font-medium text-zinc-500">{nodeGroup.nodeTitle}</p>
-									{#each nodeGroup.tasks as task}
+									{#each nodeGroup.tasks as task (task.id)}
 										<div
 											class="flex items-start gap-2 rounded px-1 py-1.5 text-xs hover:bg-zinc-50"
 										>

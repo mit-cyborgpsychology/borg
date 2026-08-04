@@ -127,16 +127,16 @@
 
 <div class="field-container">
 	{#if mode === 'edit'}
-		<label class="mb-1 block text-sm font-medium text-zinc-600">
+		<span class="mb-1 block text-sm font-medium text-zinc-600">
 			{field.label}
-		</label>
+		</span>
 		<div class="flex gap-2">
 			<!-- Date -->
 			<div class="flex-1">
 				<input
 					type="date"
 					value={dateValue}
-					oninput={(e) => { dateValue = e.target.value; updateTimestamp(); }}
+					oninput={(e) => { dateValue = e.currentTarget.value; updateTimestamp(); }}
 					disabled={readonly}
 					class="w-full rounded border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-zinc-100"
 				/>
@@ -146,7 +146,7 @@
 				<input
 					type="time"
 					value={timeValue}
-					oninput={(e) => { timeValue = e.target.value; updateTimestamp(); }}
+					oninput={(e) => { timeValue = e.currentTarget.value; updateTimestamp(); }}
 					onfocus={() => showTimeOptions = true}
 					onblur={() => setTimeout(() => showTimeOptions = false, 150)}
 					disabled={readonly}
@@ -170,7 +170,7 @@
 			<div class="w-20">
 				<select
 					value={timezoneValue}
-					oninput={(e) => { timezoneValue = e.target.value; updateTimestamp(); }}
+					oninput={(e) => { timezoneValue = e.currentTarget.value; updateTimestamp(); }}
 					disabled={readonly}
 					class="w-full rounded border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-zinc-100"
 				>

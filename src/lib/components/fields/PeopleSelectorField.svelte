@@ -45,9 +45,9 @@
 
 <div class="field-container">
 	{#if mode === 'edit'}
-		<label class="mb-1 block text-sm font-medium text-zinc-600">
+		<span class="mb-1 block text-sm font-medium text-zinc-600">
 			{field.label}
-		</label>
+		</span>
 	{/if}
 
 	<div class="space-y-2">
@@ -79,7 +79,7 @@
 							{#if mode === 'edit'}
 								<button
 									onclick={() => {
-										value = value.filter((id) => id !== personId);
+										value = value.filter((id: string) => id !== personId);
 									}}
 									class="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
 									aria-label="Remove {person.name}"

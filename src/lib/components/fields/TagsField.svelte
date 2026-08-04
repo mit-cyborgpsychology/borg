@@ -43,9 +43,9 @@
 </script>
 
 <div class="field-container">
-	<label class="mb-1 block text-sm font-medium text-zinc-600">
+	<span class="mb-1 block text-sm font-medium text-zinc-600">
 		{field.label}
-	</label>
+	</span>
 
 	<div class="space-y-2">
 		<div class="flex flex-wrap gap-1">

@@ -15,7 +15,7 @@
 </script>
 
 <div class="field-container">
-	<label class="mb-1 block text-sm font-medium text-zinc-600">
+	<label class="mb-1 block text-sm font-medium text-zinc-600" for={field.id}>
 		{field.label}
 	</label>
 
@@ -44,6 +44,7 @@
 		</div>
 	{:else}
 		<input
+			id={field.id}
 			type="date"
 			bind:value
 			class="w-full rounded border border-zinc-700 bg-white px-3 py-2 text-black focus:border-borg-blue focus:outline-none"

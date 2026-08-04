@@ -15,7 +15,7 @@
 </script>
 
 <div class="field-container">
-	<label class="mb-1 block text-sm font-medium text-zinc-600">
+	<label class="mb-1 block text-sm font-medium text-zinc-600" for={field.id}>
 		{field.label}
 	</label>
 
@@ -25,6 +25,7 @@
 		</div>
 	{:else}
 		<textarea
+			id={field.id}
 			bind:value
 			placeholder={field.placeholder}
 			rows="3"

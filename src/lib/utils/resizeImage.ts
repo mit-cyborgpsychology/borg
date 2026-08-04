@@ -4,6 +4,6 @@ export async function compressImageFile(file: File, maxWidthOrHeight = 3600): Pr
 	return imageCompression(file, {
 		maxWidthOrHeight,
 		useWebWorker: true,
-		preserveExifData: true
+		preserveExif: true
 	});
 }

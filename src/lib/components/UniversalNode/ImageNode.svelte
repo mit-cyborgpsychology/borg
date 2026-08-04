@@ -33,7 +33,7 @@
 	let imageAspectRatio = $state(1.33); // Default aspect ratio
 
 	// Image loading state to get natural dimensions
-	let imageElement: HTMLImageElement;
+	let imageElement: HTMLImageElement = $state()!;
 
 	const storage = getStorage(app);
 

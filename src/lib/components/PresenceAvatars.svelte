@@ -147,14 +147,18 @@
 	}
 
 	// Self avatar from authStore — always shown
-	let selfUser = $derived(currentUser ? {
-		userId: currentUser.uid,
-		userName: currentUser.displayName || 'Anonymous',
-		photoUrl: currentUser.photoURL || '',
-		color: userColor,
-		lastSeen: Date.now(),
-		currentPage: $page.url.pathname
-	} : null);
+	let selfUser = $derived.by(() => {
+		const user = currentUser;
+		if (!user) return null;
+		return {
+			userId: user.uid,
+			userName: user.displayName || 'Anonymous',
+			photoUrl: user.photoURL || '',
+			color: userColor,
+			lastSeen: Date.now(),
+			currentPage: $page.url.pathname
+		};
+	});
 
 	let allUsers = $derived(
 		selfUser

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import FieldRenderer from '../../fields/FieldRenderer.svelte';
 	import TitleEditor from './TitleEditor.svelte';
-	import type { NodeTemplate } from '../../../templates';
+	import type { NodeTemplate, TemplateField } from '../../../templates';
 
 	let {
 		template,
@@ -34,7 +34,7 @@
 	<!-- Node Content -->
 	{#if nodeData.countdownMode && template.id === 'time'}
 		<!-- Countdown-only mode: show only event name and countdown -->
-		{@const eventField = template.fields.find((f) => f.type === 'timeline-selector')}
+		{@const eventField = template.fields.find((f: TemplateField) => f.type === 'timeline-selector')}
 		{#if eventField}
 			<div class="space-y-3">
 				<FieldRenderer

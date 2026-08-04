@@ -62,9 +62,9 @@
 {:else}
 	<!-- Fallback for unknown field types -->
 	<div class="field-container">
-		<label class="mb-1 block text-sm font-medium text-zinc-600">
+		<span class="mb-1 block text-sm font-medium text-zinc-600">
 			{field.label}
-		</label>
+		</span>
 		<div class="py-1 text-zinc-600">Unknown field type: {field.type}</div>
 	</div>
 {/if}

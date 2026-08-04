@@ -608,7 +608,8 @@ export class FirebaseNodesService implements INodesService {
 		const counts = { todo: 0, doing: 0, done: 0 };
 		
 		nodes.forEach(node => {
-			const status = node.data?.nodeData?.status;
+			const nodeData = node.data?.nodeData as Record<string, unknown> | undefined;
+			const status = nodeData?.status;
 			if (status === 'To Do') {
 				counts.todo++;
 			} else if (status === 'Doing') {

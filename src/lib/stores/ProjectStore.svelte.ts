@@ -1,3 +1,4 @@
+import { SvelteMap } from 'svelte/reactivity';
 import type { TaskWithContext } from '../types/task';
 import { taskService } from '../services/instances';
 
@@ -7,7 +8,7 @@ export class ProjectStore {
 	tasks = $state.raw<TaskWithContext[]>([]);
 
 	tasksByNode = $derived.by(() => {
-		const map = new Map<string, TaskWithContext[]>();
+		const map = new SvelteMap<string, TaskWithContext[]>();
 		for (const task of this.tasks) {
 			if (!task.nodeId) continue;
 			const existing = map.get(task.nodeId);

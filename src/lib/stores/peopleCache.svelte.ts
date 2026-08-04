@@ -1,3 +1,4 @@
+import { SvelteMap } from 'svelte/reactivity';
 import type { Person } from '../types/people';
 import { peopleService } from '../services/instances';
 
@@ -7,10 +8,13 @@ import { peopleService } from '../services/instances';
 // its own getPerson() fetch — previously every rendered row/pill did its own
 // independent fetch, with no cache shared across components.
 //
-// $state(new Map()) gives Svelte native fine-grained tracking of map
-// mutations (set/delete), so components reading getPersonCached(id) inside a
+// SvelteMap gives Svelte native fine-grained tracking of map mutations
+// (set/delete), so components reading getPersonCached(id) inside a
 // $derived re-evaluate automatically when that id's entry is filled in.
-const cache = $state(new Map<string, Person | null>());
+const cache = new SvelteMap<string, Person | null>();
+// Plain bookkeeping, never read reactively — a SvelteMap here would only add
+// overhead with no benefit, but ESLint's rule doesn't know that.
+// eslint-disable-next-line svelte/prefer-svelte-reactivity
 const inFlight = new Map<string, Promise<Person | null>>();
 
 function fetchPerson(personId: string, projectSlug?: string): void {

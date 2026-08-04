@@ -33,7 +33,7 @@
 </script>
 
 <div class="field-container">
-	<label class="mb-1 block text-sm font-medium text-zinc-600">
+	<label class="mb-1 block text-sm font-medium text-zinc-600" for={field.id}>
 		{field.label}
 	</label>
 
@@ -49,6 +49,7 @@
 		{:else if isTimezoneField}
 			<!-- Dropdown for timezone selection -->
 			<select
+				id={field.id}
 				bind:value
 				disabled={readonly}
 				class="w-full rounded border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-zinc-100"

@@ -18,7 +18,7 @@
 
 <div class="field-container">
 	{#if !(field.id === 'title' && mode === 'display')}
-		<label class="mb-1 block text-sm font-medium text-zinc-600">
+		<label class="mb-1 block text-sm font-medium text-zinc-600" for={field.id}>
 			{field.label}
 		</label>
 	{/if}
@@ -35,6 +35,7 @@
 		</div>
 	{:else}
 		<input
+			id={field.id}
 			type="text"
 			bind:value
 			placeholder={field.placeholder}

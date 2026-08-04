@@ -39,7 +39,7 @@
 		const upcoming: TimelineEvent[] = [];
 		const past: TimelineEvent[] = [];
 
-		allEvents.forEach((event) => {
+		allEvents.forEach((event: TimelineEvent) => {
 			const eventDate = event.timestamp
 				? new Date(event.timestamp)
 				: (event as any).date

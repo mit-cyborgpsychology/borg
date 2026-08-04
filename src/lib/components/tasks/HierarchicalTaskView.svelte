@@ -130,7 +130,7 @@
 		const recent: TaskWithContext[] = [];
 		const older: TaskWithContext[] = [];
 
-		tasks.forEach((task) => {
+		tasks.forEach((task: TaskWithContext) => {
 			const taskDate = task.updatedAt ? new Date(task.updatedAt) : new Date(task.createdAt);
 			if (taskDate >= sevenDaysAgo) {
 				recent.push(task);

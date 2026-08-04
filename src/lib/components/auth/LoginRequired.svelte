@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { authStore, firebaseAuth } from '../../stores/authStore';
 	import GoogleLoginButton from './GoogleLoginButton.svelte';
+	import type { Snippet } from 'svelte';
 
+	let { children }: { children?: Snippet } = $props();
 	let { user, isApproved, loading } = $derived($authStore);
 
 	async function handleSignIn() {
@@ -40,5 +42,5 @@
 		</div>
 	</div>
 {:else}
-	<slot />
+	{@render children?.()}
 {/if}
