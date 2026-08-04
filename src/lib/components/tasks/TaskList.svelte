@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { StickyNote, Edit, Trash2 } from '@lucide/svelte';
 	import type { Task } from '../../types/task';
-	import { ServiceFactory } from '../../services/ServiceFactory';
-	import type { IPeopleService, ITaskService } from '../../services/interfaces';
+	import { peopleService, taskService } from '../../services/instances';
 	import TaskModal from './TaskModal.svelte';
 
 	interface Props {
@@ -13,9 +12,6 @@
 	}
 
 	let { tasks, nodeId, projectSlug, onTasksUpdated }: Props = $props();
-
-	const peopleService: IPeopleService = ServiceFactory.createPeopleService();
-	const taskService: ITaskService = ServiceFactory.createTaskService();
 
 	let editingTask = $state<Task | null>(null);
 	let allPeople = $state<any[]>([]);

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { PersonTaskCount } from '../../types/task';
-	import { ServiceFactory } from '../../services/ServiceFactory';
-	import type { IPeopleService } from '../../services/interfaces';
+	import { peopleService } from '../../services/instances';
 
 	interface Props {
 		personTaskCount: PersonTaskCount;
@@ -9,8 +8,6 @@
 	}
 
 	let { personTaskCount, onclick }: Props = $props();
-
-	const peopleService: IPeopleService = ServiceFactory.createPeopleService();
 	let person = $state<any>(null);
 
 	// Load person data

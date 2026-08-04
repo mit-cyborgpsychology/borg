@@ -15,8 +15,9 @@
 	import UniversalNode from './UniversalNode/UniversalNode.svelte';
 	import NoteNode from './UniversalNode/NoteNode.svelte';
 	import StickerNode from './UniversalNode/StickerNode.svelte';
-	import { ServiceFactory } from '../services/ServiceFactory';
-	import type { INodesService, IProjectsService, ITaskService } from '../services/interfaces';
+	import { FirebaseNodesService } from '../services/firebase/FirebaseNodesService';
+	import { projectsService, taskService } from '../services/instances';
+	import type { INodesService } from '../services/interfaces';
 	import CreateNodeModal from './CreateNodeModal.svelte';
 	import EditPanel from './EditPanel.svelte';
 	import NodeTaskSidebar from './tasks/NodeTaskSidebar.svelte';
@@ -74,8 +75,6 @@
 	let previousNodes = $state.raw<Node[]>([]);
 	let previousEdges = $state.raw<Edge[]>([]);
 	let nodesService: INodesService;
-	let projectsService: IProjectsService;
-	let taskService: ITaskService;
 	let showCreateModal = $state(false);
 	let createPosition = $state({ x: 0, y: 0 });
 	let saveTimeout: ReturnType<typeof setTimeout>;
@@ -416,18 +415,14 @@
 	}
 
 	onMount(() => {
-		projectsService = ServiceFactory.createProjectsService();
-		taskService = ServiceFactory.createTaskService();
-
 		// Initialize services asynchronously to get actual project ID
 		(async () => {
 			// Get the actual project ID from project slug
 			let actualProjectId = 'default-project';
-			if (projectSlug && projectsService) {
+			if (projectSlug) {
 				try {
-					const project = projectsService.getProject
-						? await projectsService.getProject(projectSlug)
-						: projectsService.getProject(projectSlug);
+					const projectResult = projectsService.getProject(projectSlug);
+					const project = projectResult instanceof Promise ? await projectResult : projectResult;
 
 					if (project) {
 						actualProjectId = project.id;
@@ -440,7 +435,7 @@
 			// Load and restore viewport position
 			await loadViewportPosition();
 
-			nodesService = ServiceFactory.createNodesService(
+			nodesService = new FirebaseNodesService(
 				actualProjectId,
 				(newNodes) => {
 					nodes = newNodes;

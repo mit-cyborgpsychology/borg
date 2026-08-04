@@ -4,16 +4,13 @@
 	import { SvelteFlowProvider } from '@xyflow/svelte';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { ServiceFactory } from '$lib/services/ServiceFactory';
-	import type { IProjectsService, ITaskService } from '$lib/services/interfaces';
+	import { projectsService, taskService } from '$lib/services/instances';
 	import { goto } from '$app/navigation';
 	import { ChevronLeft } from '@lucide/svelte';
 	import type { TaskWithContext } from '$lib/types/task';
 	import { authStore } from '$lib/stores/authStore';
 
 	const projectSlug = $derived($page.params.slug);
-	let projectsService: IProjectsService;
-	let taskService: ITaskService;
 	let project = $state<any>(null);
 	let loading = $state(true);
 	let projectTasks = $state<TaskWithContext[]>([]);
@@ -33,8 +30,6 @@
 	});
 
 	async function initializeServices() {
-		projectsService = ServiceFactory.createProjectsService();
-		taskService = ServiceFactory.createTaskService();
 		await loadProject();
 	}
 

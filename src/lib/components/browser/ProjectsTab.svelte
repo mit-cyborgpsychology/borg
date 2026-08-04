@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import type { IProjectsService, ITaskService } from '../../services/interfaces';
+	import type { IProjectsService } from '../../services/interfaces';
 	import CreateProjectModal from './CreateProjectModal.svelte';
 	import ProjectsCanvas from './ProjectsCanvas.svelte';
 	import { FolderOpen, Trash2, Search, Network, Grid, Plus } from '@lucide/svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
+	import { taskService } from '../../services/instances';
 	import { authStore } from '../../stores/authStore';
 
 	let {
@@ -30,10 +30,7 @@
 	let creatingProject = $state(false);
 	let deletingProjects = $state<Set<string>>(new Set());
 
-	let taskService: ITaskService;
-
 	onMount(() => {
-		taskService = ServiceFactory.createTaskService();
 		loadProjects();
 	});
 

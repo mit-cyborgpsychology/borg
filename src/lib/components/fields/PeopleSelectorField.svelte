@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ServiceFactory } from '../../services/ServiceFactory';
+	import { peopleService } from '../../services/instances';
 	import type { TemplateField } from '../../templates';
 
 	let {
@@ -13,9 +13,6 @@
 		readonly?: boolean;
 		mode?: 'display' | 'edit';
 	}>();
-
-	// Services for synced data
-	const peopleService = ServiceFactory.createPeopleService();
 
 	// State for people data
 	let allPeople = $state<any[]>([]);

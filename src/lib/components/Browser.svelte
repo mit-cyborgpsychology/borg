@@ -18,14 +18,9 @@
 	import TaskTab from './browser/TaskTab.svelte';
 	import PersonalTab from './browser/PersonalTab.svelte';
 	import DocsTab from './browser/DocsTab.svelte';
-	import { ServiceFactory } from '../services/ServiceFactory';
-	import type {
-		IProjectsService,
-		ITaskService,
-		IPeopleService,
-		ITimelineService,
-		IOutlineService
-	} from '../services/interfaces';
+	import { projectsService, taskService, peopleService, outlineService } from '../services/instances';
+	import { FirebaseTimelineService } from '../services/firebase/FirebaseTimelineService';
+	import type { ITimelineService } from '../services/interfaces';
 
 	import { firebaseAuth, authStore } from '../stores/authStore';
 	import PresenceAvatars from './PresenceAvatars.svelte';
@@ -39,24 +34,15 @@
 		if ($authStore.userType === 'collaborator') viewMode = 'list';
 	});
 
-	// Shared services - created once and passed to children
-	let projectsService: IProjectsService;
-	let taskService: ITaskService;
-	let peopleService: IPeopleService;
+	// Shared per-page-load service - the rest are app-wide singletons imported directly
 	let timelineService: ITimelineService;
-	let outlineService: IOutlineService;
 
 	let globalCounts = $state({ todo: 0, doing: 0, done: 0 });
 	let servicesInitialized = $state(false);
 	let cachedProjects = $state<any[]>([]);
 
 	onMount(() => {
-		// Initialize all services once
-		projectsService = ServiceFactory.createProjectsService();
-		taskService = ServiceFactory.createTaskService();
-		peopleService = ServiceFactory.createPeopleService();
-		timelineService = ServiceFactory.createTimelineService();
-		outlineService = ServiceFactory.createOutlineService();
+		timelineService = new FirebaseTimelineService();
 
 		servicesInitialized = true;
 

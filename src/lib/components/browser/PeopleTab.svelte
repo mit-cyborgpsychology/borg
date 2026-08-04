@@ -5,8 +5,7 @@
 	import AddPersonModal from './AddPersonModal.svelte';
 	import type { TaskWithContext } from '../../types/task';
 	import { PersonStandingIcon, UserCheck, UserX, Shield, Users } from '@lucide/svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
-	import type { IUserService } from '../../services/interfaces';
+	import { userService } from '../../services/instances';
 	import { authStore } from '../../stores/authStore';
 
 	let { peopleService, taskService, activeTab } = $props<{
@@ -23,12 +22,10 @@
 	let unapprovedUsers = $state<any[]>([]);
 	let loadingUnapproved = $state(false);
 	let approvalUserTypes = $state<Map<string, 'member' | 'collaborator'>>(new Map());
-	let userService: IUserService;
 
 	// Lazy load data when tab becomes active
 	$effect(() => {
 		if (activeTab === 'people' && !dataLoaded) {
-			userService = ServiceFactory.createUserService();
 			loadPeople();
 			loadUnapprovedUsers();
 		}

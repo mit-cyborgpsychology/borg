@@ -7,7 +7,7 @@
 	import { goto } from '$app/navigation';
 	import HierarchicalTaskView from '../tasks/HierarchicalTaskView.svelte';
 	import { authStore } from '../../stores/authStore';
-	import { ServiceFactory } from '../../services/ServiceFactory';
+	import { projectsService } from '../../services/instances';
 
 	let {
 		taskService,
@@ -45,7 +45,6 @@
 
 		// Filter tasks for collaborators - only show tasks from projects they're invited to
 		if ($authStore.userType === 'collaborator') {
-			const projectsService = ServiceFactory.createProjectsService();
 			const userProjects = await projectsService.getAllProjects(); // This already filters for collaborators
 			const projectSlugs = userProjects.map(p => p.slug);
 			

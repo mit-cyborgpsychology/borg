@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { X } from '@lucide/svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
+	import { peopleService, taskService } from '../../services/instances';
 	import type { TaskWithContext } from '../../types/task';
 
 	interface Props {
@@ -11,9 +11,6 @@
 	}
 
 	let { projectSlug, projectTasks, onClose, onTasksUpdated }: Props = $props();
-
-	const peopleService = ServiceFactory.createPeopleService();
-	const taskService = ServiceFactory.createTaskService();
 
 	async function handleCompleteTask(task: TaskWithContext) {
 		try {

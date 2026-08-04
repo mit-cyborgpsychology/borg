@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { X } from '@lucide/svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
-	import type { IPeopleService, ITaskService } from '../../services/interfaces';
+	import { peopleService, taskService } from '../../services/instances';
 	import type { Task } from '../../types/task';
 	import { authStore } from '../../stores/authStore';
 
@@ -15,9 +14,6 @@
 	}
 
 	let { nodeId, projectSlug, task, onClose, onTaskUpdated, onTaskAdded }: Props = $props();
-
-	const peopleService: IPeopleService = ServiceFactory.createPeopleService();
-	const taskService: ITaskService = ServiceFactory.createTaskService();
 	let people = $state<any[]>([]);
 
 	// Determine if this is edit mode

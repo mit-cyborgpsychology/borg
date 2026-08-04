@@ -20,7 +20,8 @@
 	import Toolbar from '../Toolbar.svelte';
 	import EditPanel from '../EditPanel.svelte';
 	import StickerPanel from '../stickers/StickerPanel.svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
+	import { FirebaseNodesService } from '../../services/firebase/FirebaseNodesService';
+	import { projectsService } from '../../services/instances';
 	import type { INodesService } from '../../services/interfaces';
 	import type { Project } from '$lib/types/project';
 	import { getTemplate } from '../../templates';
@@ -312,7 +313,7 @@
 	onMount(async () => {
 		try {
 			// Initialize service
-			nodesService = ServiceFactory.createNodesService(
+			nodesService = new FirebaseNodesService(
 				'project-canvas',
 				(nodes) => {
 					canvasNodes = nodes;
@@ -712,8 +713,6 @@
 	async function saveViewportPosition() {
 		if (!getViewport) return; // Not initialized yet
 
-		const projectsService = ServiceFactory.createProjectsService();
-
 		// Get current user ID
 		const currentUser = $authStore.user;
 		if (!currentUser) {
@@ -765,8 +764,6 @@
 
 	async function loadViewportPosition() {
 		if (!setViewport) return; // Not initialized yet
-
-		const projectsService = ServiceFactory.createProjectsService();
 
 		// Get current user ID
 		const currentUser = $authStore.user;

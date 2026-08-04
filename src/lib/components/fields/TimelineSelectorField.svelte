@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ServiceFactory } from '../../services/ServiceFactory';
+	import { FirebaseTimelineService } from '../../services/firebase/FirebaseTimelineService';
 	import type { TemplateField } from '../../templates';
 	import AddTimelineEventModal from '../browser/AddTimelineEventModal.svelte';
 	import { Plus } from '@lucide/svelte';
@@ -19,7 +19,7 @@
 	}>();
 
 	// Services for synced data
-	const timelineService = ServiceFactory.createTimelineService();
+	const timelineService = new FirebaseTimelineService();
 
 	// State for timeline data
 	let allEvents = $state<any[]>([]);

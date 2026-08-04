@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { X, Plus, ChevronDown, ChevronRight } from '@lucide/svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
-	import type { ITaskService } from '../../services/interfaces';
+	import { taskService } from '../../services/instances';
 	import type { Task } from '../../types/task';
 	import TaskList from './TaskList.svelte';
 	import { onMount } from 'svelte';
@@ -16,8 +15,6 @@
 	}
 
 	let { nodeId, nodeTitle, projectSlug, tasks, onClose, onTasksUpdated }: Props = $props();
-
-	const taskService: ITaskService = ServiceFactory.createTaskService();
 
 	// Active tasks are passed as props
 	const activeTasks = $derived(tasks);

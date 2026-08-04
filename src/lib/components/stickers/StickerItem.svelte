@@ -1,13 +1,11 @@
 <script lang="ts">
 	import type { Sticker } from '../../types/sticker';
-	import { ServiceFactory } from '../../services/ServiceFactory';
+	import { stickerService } from '../../services/instances';
 
 	let { sticker, category } = $props<{
 		sticker: Sticker;
 		category: string;
 	}>();
-
-	const stickerService = ServiceFactory.createStickerService();
 
 	let imageUrl = $state<string>('');
 	let imageLoaded = $state(false);

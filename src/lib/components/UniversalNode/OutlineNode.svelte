@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
 	import { Edit, Trash2, FileText, ExternalLink } from '@lucide/svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
-	import type { IOutlineService } from '../../services/interfaces/IOutlineService';
+	import { outlineService } from '../../services/instances';
 
 	let { data, id } = $props<{
 		data: any;
@@ -11,7 +10,6 @@
 	}>();
 
 	let nodeData = $derived(data.nodeData || {});
-	const outlineService: IOutlineService = ServiceFactory.createOutlineService();
 	let isCreating = $state(false);
 
 	// Same projectSlug derivation pattern as UniversalNode.svelte

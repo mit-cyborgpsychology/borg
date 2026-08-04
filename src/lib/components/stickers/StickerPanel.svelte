@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { X } from '@lucide/svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
+	import { stickerService } from '../../services/instances';
 	import type { StickerCategory } from '../../types/sticker';
 	import StickerGrid from './StickerGrid.svelte';
 
@@ -8,8 +8,6 @@
 		isOpen: boolean;
 		onClose: () => void;
 	}>();
-
-	const stickerService = ServiceFactory.createStickerService();
 
 	let categories = $state<StickerCategory[]>([]);
 	let activeCategory = $state<string>('');
