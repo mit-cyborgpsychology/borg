@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 import type { IOutlineService, OutlineDoc, OutlineDocSummary } from './interfaces/IOutlineService';
 import { authStore } from '../stores/authStore';
-import { ServiceFactory } from './ServiceFactory';
+import { projectsService } from './instances';
 
 async function authHeader(): Promise<Record<string, string>> {
 	const user = get(authStore).user;
@@ -16,7 +16,6 @@ export class OutlineService implements IOutlineService {
 	async createDoc(projectSlug: string, title: string): Promise<OutlineDoc> {
 		const headers = await authHeader();
 
-		const projectsService = ServiceFactory.createProjectsService();
 		const project = await projectsService.getProject(projectSlug);
 		if (!project) {
 			throw new Error(`Project not found: ${projectSlug}`);

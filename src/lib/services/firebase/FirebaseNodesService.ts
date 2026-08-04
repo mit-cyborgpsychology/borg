@@ -17,7 +17,7 @@ import type { INodesService } from '../interfaces/INodesService';
 import { getTemplate } from '../../templates';
 import { get } from 'svelte/store';
 import { authStore } from '../../stores/authStore';
-import { ServiceFactory } from '../ServiceFactory';
+import { projectsService, taskService } from '../instances';
 
 export class FirebaseNodesService implements INodesService {
 	private projectId: string;
@@ -189,7 +189,6 @@ export class FirebaseNodesService implements INodesService {
 			const statusChanged = updates.nodeData?.status || updates.data?.nodeData?.status;
 			if (statusChanged && this.projectSlug) {
 				try {
-					const projectsService = ServiceFactory.createProjectsService();
 					if (projectsService.invalidateStatusCache) {
 						projectsService.invalidateStatusCache(this.projectSlug);
 					}
@@ -246,7 +245,6 @@ export class FirebaseNodesService implements INodesService {
 
 			// Clean up associated tasks
 			try {
-				const taskService = ServiceFactory.createTaskService();
 				const nodeTasks = await taskService.getNodeTasks(nodeId, this.projectSlug);
 				
 				// Delete all tasks associated with this node
@@ -548,7 +546,6 @@ export class FirebaseNodesService implements INodesService {
 			if (nodeIds.length === 0) return;
 			
 			try {
-				const taskService = ServiceFactory.createTaskService();
 				if (taskService.refreshNodeTitlesForNode) {
 					// Use optimized method that only refreshes specific nodes
 					for (const nodeId of nodeIds) {
