@@ -25,7 +25,7 @@
 	import Toolbar from './Toolbar.svelte';
 	import StickerPanel from './stickers/StickerPanel.svelte';
 	import Cursor from './Cursor.svelte';
-	import type { Task, TaskWithContext } from '../types/task';
+	import type { Task } from '../types/task';
 	import { authStore } from '../stores/authStore';
 	import {
 		updateMatchingNodes as updateMatches,
@@ -37,20 +37,29 @@
 	import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 	import { app } from '../firebase/config';
 	import { compressImageFile } from '../utils/resizeImage';
+	import { ProjectStore } from '../stores/ProjectStore.svelte';
+	import { setProjectStoreContext } from '../stores/projectStoreContext';
 	import '@xyflow/svelte/dist/style.css';
 	import './svelteflow.css';
 
 	let {
 		projectSlug,
 		onProjectUpdate,
-		onPanelOpen,
-		projectTasks = []
+		onPanelOpen
 	} = $props<{
 		projectSlug?: string;
 		onProjectUpdate?: () => void;
 		onPanelOpen?: () => void;
-		projectTasks?: TaskWithContext[];
 	}>();
+
+	const projectStore = new ProjectStore();
+	setProjectStoreContext(projectStore);
+
+	$effect(() => {
+		if (!projectSlug) return;
+		projectStore.open(projectSlug);
+		return () => projectStore.close();
+	});
 
 	const nodeTypes = {
 		universal: UniversalNode
@@ -1230,9 +1239,10 @@
 		)
 	);
 
-	// Active tasks grouped by node for sidebar
-	let activeTasks = $derived(projectTasks.filter((t) => (t.status || 'active') === 'active'));
-	let tasksByNode = $derived(
+	// Active tasks grouped by node for sidebar (sidebar-display shape, distinct
+	// from projectStore.tasksByNode which UniversalNode reads for badge counts)
+	let activeTasks = $derived(projectStore.tasks.filter((t) => (t.status || 'active') === 'active'));
+	let sidebarTasksByNode = $derived(
 		activeTasks.reduce(
 			(acc, task) => {
 				if (!acc[task.nodeId]) acc[task.nodeId] = { nodeTitle: task.nodeTitle, tasks: [] };
@@ -1473,7 +1483,7 @@
 						<p class="p-4 text-center text-xs text-zinc-400">No active tasks</p>
 					{:else}
 						<div class="space-y-3 p-2">
-							{#each Object.entries(tasksByNode) as [, nodeGroup]}
+							{#each Object.entries(sidebarTasksByNode) as [, nodeGroup]}
 								<div>
 									<p class="mb-1 px-1 text-xs font-medium text-zinc-500">{nodeGroup.nodeTitle}</p>
 									{#each nodeGroup.tasks as task}

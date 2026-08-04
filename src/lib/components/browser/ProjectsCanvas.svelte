@@ -35,6 +35,8 @@
 	import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 	import { app } from '../../firebase/config';
 	import { compressImageFile } from '../../utils/resizeImage';
+	import { ProjectStore } from '../../stores/ProjectStore.svelte';
+	import { setProjectStoreContext } from '../../stores/projectStoreContext';
 	import '@xyflow/svelte/dist/style.css';
 	import '../svelteflow.css';
 
@@ -57,6 +59,18 @@
 		projectCanvas: ProjectCanvasNode,
 		sticker: StickerNode
 	};
+
+	// The scratch canvas is a synthetic pseudo-project ('project-canvas') distinct
+	// from any real project — its own universal nodes need a ProjectStore in
+	// context too, same as Canvas.svelte, so UniversalNode can read task data
+	// without opening its own per-node Firestore listener.
+	const projectStore = new ProjectStore();
+	setProjectStoreContext(projectStore);
+
+	$effect(() => {
+		projectStore.open('project-canvas');
+		return () => projectStore.close();
+	});
 
 	let canvasNodes = $state<Node[]>([]);
 	let canvasEdges = $state<Edge[]>([]);

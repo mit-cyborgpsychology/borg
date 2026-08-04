@@ -4,17 +4,14 @@
 	import { SvelteFlowProvider } from '@xyflow/svelte';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { projectsService, taskService } from '$lib/services/instances';
+	import { projectsService } from '$lib/services/instances';
 	import { goto } from '$app/navigation';
 	import { ChevronLeft } from '@lucide/svelte';
-	import type { TaskWithContext } from '$lib/types/task';
 	import { authStore } from '$lib/stores/authStore';
 
 	const projectSlug = $derived($page.params.slug);
 	let project = $state<any>(null);
 	let loading = $state(true);
-	let projectTasks = $state<TaskWithContext[]>([]);
-	let taskSubscriptionCleanup: (() => void) | null = null;
 
 	onMount(async () => {
 		if ($authStore.loading) {
@@ -33,15 +30,6 @@
 		await loadProject();
 	}
 
-	$effect(() => {
-		return () => {
-			if (taskSubscriptionCleanup) {
-				taskSubscriptionCleanup();
-				taskSubscriptionCleanup = null;
-			}
-		};
-	});
-
 	async function loadProject() {
 		if (!projectSlug) return;
 		const projectResult = await projectsService.getProject(projectSlug);
@@ -52,28 +40,7 @@
 			return;
 		}
 
-		await loadProjectTasks();
 		loading = false;
-	}
-
-	async function loadProjectTasks() {
-		if (projectSlug && taskService) {
-			if (taskSubscriptionCleanup) {
-				taskSubscriptionCleanup();
-				taskSubscriptionCleanup = null;
-			}
-
-			if ((taskService as any).subscribeToProjectTasks) {
-				taskSubscriptionCleanup = (taskService as any).subscribeToProjectTasks(
-					projectSlug,
-					(updatedTasks: TaskWithContext[]) => {
-						projectTasks = [...updatedTasks];
-					}
-				);
-			} else {
-				projectTasks = await taskService.getProjectTasks(projectSlug);
-			}
-		}
 	}
 
 	async function handleProjectUpdate() {
@@ -117,7 +84,6 @@
 		<SvelteFlowProvider>
 			<Canvas
 				{projectSlug}
-				{projectTasks}
 				onProjectUpdate={handleProjectUpdate}
 				onPanelOpen={() => {}}
 			/>

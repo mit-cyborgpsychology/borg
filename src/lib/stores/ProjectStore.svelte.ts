@@ -24,10 +24,17 @@ export class ProjectStore {
 
 	private unsubTasks: (() => void) | null = null;
 
+	// Plain (non-reactive) fields for reentrancy bookkeeping — these must NOT
+	// be $state, or reading them inside open()/close() (which callers invoke
+	// from inside a Svelte $effect) makes that effect depend on them, and the
+	// write later in the same call re-triggers the effect: an infinite loop.
+	private currentSlug: string | null = null;
+
 	async open(projectSlug: string) {
-		if (this.projectSlug === projectSlug && this.unsubTasks) return;
+		if (this.currentSlug === projectSlug && this.unsubTasks) return;
 
 		this.close();
+		this.currentSlug = projectSlug;
 		this.projectSlug = projectSlug;
 
 		if (taskService.subscribeToProjectTasks) {
@@ -45,6 +52,7 @@ export class ProjectStore {
 			this.unsubTasks();
 			this.unsubTasks = null;
 		}
+		this.currentSlug = null;
 		this.projectSlug = null;
 		this.tasks = [];
 	}

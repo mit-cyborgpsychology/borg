@@ -9,9 +9,7 @@
 	import NodeHeader from './components/NodeHeader.svelte';
 	import NodeContent from './components/NodeContent.svelte';
 	import NodeTasks from './components/NodeTasks.svelte';
-	import { ServiceFactory } from '../../services/ServiceFactory';
-	import type { ITaskService } from '../../services/interfaces/ITaskService';
-	import type { Task } from '../../types/task';
+	import { getProjectStoreContext } from '../../stores/projectStoreContext';
 	import { Lock } from '@lucide/svelte';
 
 	let { data, id } = $props<{ data: any; id: string }>();
@@ -39,120 +37,15 @@
 		}
 	});
 
-	// Task-related state
-	const taskService: ITaskService = ServiceFactory.createTaskService();
-
 	// Title inline editing state
 	let isEditingTitle = $state(false);
 
-	// Get tasks for this node from TaskService instead of embedded data
-	let tasks = $state<Task[]>([]);
+	// Tasks for this node, read from the ancestor Canvas/ProjectsCanvas's
+	// single project-level task subscription instead of opening a listener
+	// per node (previously: one Firestore subscription per rendered node).
+	const projectStore = getProjectStoreContext();
+	let tasks = $derived(projectStore.tasksByNode.get(id) ?? []);
 	let hasTasks = $derived(tasks.length > 0);
-
-	// Reactive flag to trigger task refresh
-	let refreshTrigger = $state(0);
-
-	// Removed global task update listener - Firebase subscriptions handle updates automatically
-	// Task counts will update when Firebase data changes via the Canvas subscriptions
-
-	// Track subscription state to prevent unnecessary recreations
-	let currentSubscription: (() => void) | null = null;
-	let subscribedNodeId = '';
-	let subscribedProjectSlug = '';
-	let isSubscriptionSetup = false;
-
-	// Use Firebase subscription for real-time task updates
-	$effect(() => {
-		// Get project slug from data if available, otherwise extract from URL
-		const projectSlug =
-			data.projectSlug ||
-			(() => {
-				if (typeof window !== 'undefined') {
-					const currentPath = window.location.pathname;
-					const pathParts = currentPath.split('/');
-					return pathParts[2]; // /project/[slug]/...
-				}
-				return null;
-			})();
-
-		const currentNodeId = id;
-		const currentProjectSlug = projectSlug || '';
-
-		// Only setup subscription if node ID or project actually changed
-		if (
-			isSubscriptionSetup &&
-			subscribedNodeId === currentNodeId &&
-			subscribedProjectSlug === currentProjectSlug
-		) {
-			console.log(
-				`UniversalNode: Subscription already exists for node ${currentNodeId}, skipping setup`
-			);
-			return; // Already subscribed to this exact node/project combination
-		}
-
-		// Cleanup existing subscription if parameters changed
-		if (
-			currentSubscription &&
-			(subscribedNodeId !== currentNodeId || subscribedProjectSlug !== currentProjectSlug)
-		) {
-			console.log(
-				`UniversalNode: Cleaning up subscription for node ${subscribedNodeId} (switching to ${currentNodeId})`
-			);
-			currentSubscription();
-			currentSubscription = null;
-			isSubscriptionSetup = false;
-		}
-
-		// Use subscription if available, otherwise fallback to one-time fetch
-		if ((taskService as any).subscribeToNodeTasks) {
-			console.log(
-				`UniversalNode: Setting up real-time task subscription for node ${currentNodeId}`
-			);
-
-			const unsubscribe = (taskService as any).subscribeToNodeTasks(
-				currentNodeId,
-				(updatedTasks: Task[]) => {
-					console.log(
-						`UniversalNode: Node ${currentNodeId} received ${updatedTasks.length} tasks via subscription`
-					);
-					tasks = updatedTasks;
-				},
-				projectSlug
-			);
-
-			currentSubscription = unsubscribe;
-			subscribedNodeId = currentNodeId;
-			subscribedProjectSlug = currentProjectSlug;
-			isSubscriptionSetup = true;
-
-			// Cleanup subscription when component unmounts
-			return () => {
-				if (currentSubscription) {
-					console.log(`UniversalNode: Cleaning up task subscription for node ${currentNodeId}`);
-					currentSubscription();
-					currentSubscription = null;
-					subscribedNodeId = '';
-					subscribedProjectSlug = '';
-					isSubscriptionSetup = false;
-				}
-			};
-		} else {
-			// Fallback to one-time fetch for non-Firebase services
-			(async () => {
-				const nodeTasksResult = projectSlug
-					? taskService.getNodeTasks(currentNodeId, projectSlug)
-					: taskService.getNodeTasks(currentNodeId);
-
-				const nodeTasks =
-					nodeTasksResult instanceof Promise ? await nodeTasksResult : nodeTasksResult;
-
-				console.log(
-					`UniversalNode: Node ${currentNodeId} loaded ${nodeTasks.length} tasks (one-time fetch)`
-				);
-				tasks = nodeTasks;
-			})();
-		}
-	});
 
 	// Determine border color based on status
 	let borderColor = $derived.by(() => {

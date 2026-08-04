@@ -23,15 +23,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Service Architecture Pattern
-The codebase uses a **dual-service architecture** that switches between local storage and Firebase based on the `VITE_SERVICE_MODE` environment variable:
+All data is stored in Firebase — there is no local-storage mode. No-arg services
+(Projects, Tasks, People, Sticker, User, Outline) are shared singletons exported
+from `src/lib/services/instances.ts` and imported directly wherever needed.
+Services that require constructor arguments (Nodes — takes a project ID and
+state callbacks; Timeline — takes an optional project ID) are constructed
+directly at each call site with `new FirebaseXService(...)`, since they can't
+be shared singletons.
 
-- **Local Mode**: Data stored in browser localStorage (default)
-- **Firebase Mode**: Data stored in Firebase with authentication required
-
-The `ServiceFactory` class (`src/lib/services/ServiceFactory.ts`) creates appropriate service instances:
-- Projects, Tasks, People, Timeline, Nodes, and User services
-- Sticker service always uses Firebase Storage regardless of mode
-- Mode switching controlled by `VITE_SERVICE_MODE=firebase` environment variable
+For canvas-scoped live data (currently: a project's tasks), components read
+from a `ProjectStore` (`src/lib/stores/ProjectStore.svelte.ts`) provided via
+Svelte context (`src/lib/stores/projectStoreContext.ts`) rather than opening
+their own Firestore subscription — this keeps read/listener volume constant
+per open project regardless of how many canvas nodes are rendered.
 
 ### Key Service Interfaces
 All services implement interfaces in `src/lib/services/interfaces/`:
@@ -51,7 +55,7 @@ All services implement interfaces in `src/lib/services/interfaces/`:
 ### Authentication
 - Firebase Auth integration via `authStore` (Svelte store)
 - User approval system with member/collaborator roles
-- Authentication wrapper in `+layout.svelte` only active in Firebase mode
+- Authentication wrapper in `+layout.svelte`
 
 ### Frontend Stack
 - **SvelteKit 5** with TypeScript
@@ -67,19 +71,17 @@ All services implement interfaces in `src/lib/services/interfaces/`:
 - `src/lib/components/tasks/` - Task management UI
 
 ### Key Patterns
-- Services instantiated via factory pattern for mode switching
-- Interface-based design for service abstractions
-- Svelte stores for state management (`authStore`)
+- No-arg services as shared singletons (`src/lib/services/instances.ts`); constructor-arg services instantiated directly at each call site
+- Interface-based design for service abstractions (`src/lib/services/interfaces/`)
+- Svelte stores for state management (`authStore` for auth, `ProjectStore` for canvas-scoped live data via context)
 - Dynamic field rendering system for extensible forms
 - Canvas-based project visualization with node system
 
 ### Environment Variables
-- `VITE_SERVICE_MODE` - 'local' or 'firebase' (defaults to local)
 - Firebase config variables (API keys, project ID, etc.)
 - Use `demo-` prefix in project ID to enable emulator mode
 
 ### Development Notes
 - Uses pnpm package manager
-- Legacy local services marked as deprecated (see `src/lib/services/local/README.md`)
 - Firebase emulator setup supports full development workflow
-- Authentication required only in Firebase mode
+- Authentication required for all data access
