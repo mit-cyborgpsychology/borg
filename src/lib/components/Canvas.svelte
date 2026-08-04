@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import {
 		SvelteFlow,
 		Background,
@@ -1242,10 +1243,21 @@
 	// Active tasks grouped by node for sidebar (sidebar-display shape, distinct
 	// from projectStore.tasksByNode which UniversalNode reads for badge counts)
 	let activeTasks = $derived(projectStore.tasks.filter((t) => (t.status || 'active') === 'active'));
+	// Live node titles from the already-subscribed nodes array, so the
+	// sidebar reflects a node's current title immediately on rename instead
+	// of a stored copy on the task that has no update path.
+	let liveNodeTitles = $derived.by(() => {
+		const map = new SvelteMap<string, string>();
+		for (const node of nodes) map.set(node.id, getNodeLabel(node));
+		return map;
+	});
 	let sidebarTasksByNode = $derived(
 		activeTasks.reduce(
 			(acc, task) => {
-				if (!acc[task.nodeId]) acc[task.nodeId] = { nodeTitle: task.nodeTitle, tasks: [] };
+				if (!acc[task.nodeId]) {
+					const nodeTitle = liveNodeTitles.get(task.nodeId) ?? task.nodeTitle ?? 'Untitled';
+					acc[task.nodeId] = { nodeTitle, tasks: [] };
+				}
 				acc[task.nodeId].tasks.push(task);
 				return acc;
 			},

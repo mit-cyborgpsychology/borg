@@ -5,6 +5,7 @@
 	import type { TaskWithContext } from '../../types/task';
 	import { authStore } from '../../stores/authStore';
 	import HierarchicalTaskView from './HierarchicalTaskView.svelte';
+	import { joinTaskContext } from '../../services/taskContext';
 
 	let { taskService } = $props<{
 		taskService: ITaskService;
@@ -57,6 +58,11 @@
 			logTasks = userResolvedTasks;
 			filteredLogTasks = userResolvedTasks;
 			dataLoaded = true;
+
+			joinTaskContext(userResolvedTasks).then((joined) => {
+				logTasks = joined;
+				filteredLogTasks = joined;
+			});
 		} catch (error) {
 			console.error('Failed to load task log:', error);
 			logTasks = [];

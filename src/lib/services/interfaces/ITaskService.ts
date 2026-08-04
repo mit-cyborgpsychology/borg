@@ -22,10 +22,6 @@ export interface ITaskService {
 	getActiveTasks(): Promise<TaskWithContext[]> | TaskWithContext[];
 	getResolvedTasks(): Promise<TaskWithContext[]> | TaskWithContext[];
 	getTaskCounts(projectSlug?: string): Promise<TaskCounts> | TaskCounts;
-	getOverdueTasks(projectSlug?: string): Promise<TaskWithContext[]> | TaskWithContext[];
-	updateOverdueStatus(): Promise<void> | void;
-	refreshNodeTitles?(): Promise<void> | void;
-	refreshNodeTitlesForNode?(nodeId: string, projectId: string, nodeTitle?: string, nodeType?: string): Promise<void> | void;
 	getPersonResolvedTasksLog?(personId: string, daysBack?: number): Promise<TaskWithContext[]> | TaskWithContext[];
 	getAllResolvedTasksLog?(daysBack?: number): Promise<TaskWithContext[]> | TaskWithContext[];
 

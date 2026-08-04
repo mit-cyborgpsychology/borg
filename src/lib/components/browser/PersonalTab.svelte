@@ -7,6 +7,7 @@
 	import { db } from '../../firebase/config';
 	import HierarchicalTaskView from '../tasks/HierarchicalTaskView.svelte';
 	import TaskLog from '../tasks/TaskLog.svelte';
+	import { joinTaskContext } from '../../services/taskContext';
 
 	let { taskService, activeTab } = $props<{
 		taskService: ITaskService;
@@ -89,7 +90,9 @@
 
 			const result = taskService.getPersonTasks(personId);
 			const tasks = result instanceof Promise ? await result : result;
-			userTasks = tasks.filter((task: any) => !task.resolvedAt);
+			const active = tasks.filter((task: any) => !task.resolvedAt);
+			userTasks = active;
+			joinTaskContext(active).then((joined) => (userTasks = joined));
 		} catch (error) {
 			console.error('Failed to load user tasks:', error);
 			userTasks = [];
@@ -106,7 +109,9 @@
 			// Get all resolved tasks and filter by person
 			const result = taskService.getResolvedTasks();
 			const allResolvedTasks = result instanceof Promise ? await result : result;
-			resolvedUserTasks = allResolvedTasks.filter((task: any) => task.assignee === personId);
+			const filtered = allResolvedTasks.filter((task: any) => task.assignee === personId);
+			resolvedUserTasks = filtered;
+			joinTaskContext(filtered).then((joined) => (resolvedUserTasks = joined));
 		} catch (error) {
 			console.error('Failed to load resolved user tasks:', error);
 			resolvedUserTasks = [];

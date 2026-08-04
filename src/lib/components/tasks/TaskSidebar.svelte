@@ -68,7 +68,7 @@
 				(acc, task) => {
 					if (!acc[task.nodeId]) {
 						acc[task.nodeId] = {
-							nodeTitle: task.nodeTitle,
+							nodeTitle: task.nodeTitle || 'Untitled',
 							nodeType: task.nodeType,
 							tasks: []
 						};

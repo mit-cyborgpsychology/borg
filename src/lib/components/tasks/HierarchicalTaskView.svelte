@@ -88,7 +88,7 @@
 			const projectSlug = task.projectSlug || 'unknown';
 			const projectTitle = task.projectTitle || (task.sourceType === 'outline' ? 'Outline' : 'Unknown Project');
 			const nodeId = task.nodeId;
-			const nodeTitle = task.nodeTitle;
+			const nodeTitle = task.nodeTitle || 'Untitled';
 			const nodeType = task.nodeType;
 
 			if (!projects[projectSlug]) {

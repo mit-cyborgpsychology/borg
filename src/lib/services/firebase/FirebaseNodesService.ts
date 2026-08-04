@@ -27,9 +27,6 @@ export class FirebaseNodesService implements INodesService {
 	private getEdgesCallback: () => Edge[];
 	private projectSlug?: string;
 	private isUpdatingPositions = false;
-	// Add debounced refresh mechanism to prevent excessive calls
-	private refreshTaskTitlesTimeout: ReturnType<typeof setTimeout> | null = null;
-	private pendingNodeTitleRefreshes = new Set<string>();
 
 	constructor(
 		projectId: string,
@@ -195,19 +192,6 @@ export class FirebaseNodesService implements INodesService {
 				} catch (error) {
 					console.warn('Failed to invalidate status cache:', error);
 				}
-			}
-
-			// Only refresh task titles if title or template type actually changed AND has meaningful content
-			const titleChanged = 
-				(updates.nodeData?.title !== undefined && updates.nodeData.title !== '') || 
-				(updates.data?.nodeData?.title !== undefined && updates.data.nodeData.title !== '');
-			const typeChanged = updates.data?.templateType !== undefined;
-			
-			// Skip refresh for empty/new nodes to avoid unnecessary requests
-			if ((titleChanged || typeChanged) && (updates.nodeData?.title || updates.data?.nodeData?.title)) {
-				// Use targeted refresh instead of full refresh to avoid 100+ requests
-				this.pendingNodeTitleRefreshes.add(nodeId);
-				this.debouncedRefreshTaskTitles();
 			}
 
 			// Note: We don't update local state here because the subscription will handle it
@@ -532,35 +516,6 @@ export class FirebaseNodesService implements INodesService {
 			}
 		}
 		return filtered;
-	}
-
-	private debouncedRefreshTaskTitles() {
-		if (this.refreshTaskTitlesTimeout) {
-			clearTimeout(this.refreshTaskTitlesTimeout);
-		}
-		
-		this.refreshTaskTitlesTimeout = setTimeout(async () => {
-			const nodeIds = Array.from(this.pendingNodeTitleRefreshes);
-			this.pendingNodeTitleRefreshes.clear();
-			
-			if (nodeIds.length === 0) return;
-			
-			try {
-				if (taskService.refreshNodeTitlesForNode) {
-					// Use optimized method that only refreshes specific nodes
-					for (const nodeId of nodeIds) {
-						await taskService.refreshNodeTitlesForNode(nodeId, this.projectId);
-					}
-					console.log(`Task titles refreshed for ${nodeIds.length} specific nodes`);
-				} else if (taskService.refreshNodeTitles) {
-					// Fallback to full refresh only if targeted method not available
-					await taskService.refreshNodeTitles();
-					console.log('Task titles refreshed (full refresh fallback)');
-				}
-			} catch (error) {
-				console.warn('Failed to refresh task titles after node update:', error);
-			}
-		}, 500); // 500ms debounce
 	}
 
 	subscribeToNodes(callback: (nodes: Node[]) => void): () => void {

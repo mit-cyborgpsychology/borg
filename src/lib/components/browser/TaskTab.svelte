@@ -8,6 +8,7 @@
 	import { authStore } from '../../stores/authStore';
 	import { projectsService } from '../../services/instances';
 	import { getPersonCached } from '../../stores/peopleCache.svelte';
+	import { joinTaskContext } from '../../services/taskContext';
 
 	let {
 		taskService,
@@ -60,6 +61,16 @@
 
 		applyFilters();
 		dataLoaded = true;
+
+		// Resolve live project/node titles in the background so the list
+		// renders immediately with whatever's cached, then updates in place.
+		const [joinedActive, joinedResolved] = await Promise.all([
+			joinTaskContext(allActiveTasks),
+			joinTaskContext(allResolvedTasks)
+		]);
+		activeTasks = joinedActive;
+		resolvedTasks = joinedResolved;
+		applyFilters();
 	}
 
 	async function applyFilters() {
@@ -77,7 +88,7 @@
 
 			for (const task of filtered) {
 				const titleMatch = task.title.toLowerCase().includes(query);
-				const nodeMatch = task.nodeTitle.toLowerCase().includes(query);
+				const nodeMatch = task.nodeTitle?.toLowerCase().includes(query) || false;
 				const projectMatch = task.projectTitle?.toLowerCase().includes(query);
 
 				let personMatch = false;
