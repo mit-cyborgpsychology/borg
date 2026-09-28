@@ -1,4 +1,5 @@
 import { normalizeLinkNode } from '../../features/links/linkNode';
+import { isFinitePosition } from '../../utils/canvasGeometry';
 import {
 	collection,
 	doc,
@@ -177,6 +178,8 @@ export class FirebaseNodesRepository implements INodesRepository {
 		const batch = writeBatch(this.db);
 		const updatedAt = new Date();
 		for (const node of nodes) {
+			if (!isFinitePosition(node.position))
+				throw new Error('Node position must contain finite coordinates');
 			const nodeRef = doc(this.db, 'projects', this.projectId, 'nodes', node.id);
 			const positionUpdate = {
 				position: node.position,
@@ -280,11 +283,7 @@ export class FirebaseNodesRepository implements INodesRepository {
 		}
 
 		// Check for required position data
-		if (
-			!data.position ||
-			typeof data.position.x !== 'number' ||
-			typeof data.position.y !== 'number'
-		) {
+		if (!isFinitePosition(data.position)) {
 			console.warn(`Node ${nodeId}: Invalid or missing position data`, data.position);
 			return false;
 		}

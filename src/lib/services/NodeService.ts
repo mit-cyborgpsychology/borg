@@ -1,4 +1,4 @@
-import { canonicalNodeType } from '../features/links/linkNode.ts';
+import { canonicalNodeType, normalizeLinkNode } from '../features/links/linkNode.ts';
 import { getTemplate } from '../templates.ts';
 import type { INodesService, IProjectsService, ITaskService } from './interfaces';
 import type { INodesRepository } from './interfaces/INodesRepository';
@@ -32,7 +32,7 @@ export function createNodeService(
 			return repository.createNode(
 				templateType,
 				position,
-				fields,
+				normalizeLinkNode(templateType, fields).nodeData,
 				readSession().user?.uid ?? 'anonymous'
 			);
 		},

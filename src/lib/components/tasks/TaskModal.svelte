@@ -7,6 +7,7 @@
 	import type { Task } from '../../types/task';
 
 	const { authStore, peopleService, taskService } = getAppServices();
+	let dialog: HTMLDialogElement;
 	interface Props {
 		nodeId: string;
 		projectSlug?: string;
@@ -22,6 +23,8 @@
 	const command = feature.command;
 	let people = $derived($peopleResource.data);
 	onMount(() => {
+		dialog.showModal();
+		dialog.querySelector('input')?.focus();
 		void feature.loadPeople();
 	});
 	onDestroy(() => feature.dispose());
@@ -62,100 +65,100 @@
 	}
 </script>
 
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-	<div class="w-full max-w-md rounded-lg border border-zinc-200 bg-borg-beige p-6">
-		<div class="mb-4 flex items-center justify-between">
-			<h2 class="text-lg font-semibold text-black">{modalTitle}</h2>
-			<button
-				onclick={onClose}
-				class="rounded-lg p-1 text-zinc-400 hover:bg-white hover:text-zinc-600"
-			>
-				<X class="h-5 w-5" />
-			</button>
+<dialog
+	bind:this={dialog}
+	oncancel={onClose}
+	aria-label={modalTitle}
+	class="nodrag nopan fixed m-auto w-full max-w-md rounded-lg border border-zinc-200 bg-borg-beige p-6 backdrop:bg-black/30"
+>
+	<div class="mb-4 flex items-center justify-between">
+		<h2 class="text-lg font-semibold text-black">{modalTitle}</h2>
+		<button
+			onclick={onClose}
+			aria-label="Close task"
+			class="rounded-lg p-1 text-zinc-400 hover:bg-white hover:text-zinc-600"
+		>
+			<X class="h-5 w-5" />
+		</button>
+	</div>
+
+	<AsyncStatus state={$peopleResource} onRetry={() => void feature.loadPeople()} />
+	<AsyncStatus state={$command} pendingLabel="Saving…" />
+	<form onsubmit={handleSubmit} class="space-y-4">
+		<div>
+			<label for="title" class="mb-1 block text-sm font-medium text-zinc-600"> Task </label>
+			<input
+				id="title"
+				type="text"
+				bind:value={title}
+				placeholder="What needs to be done?"
+				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black placeholder-zinc-500 focus:ring-2 focus:ring-borg-blue focus:outline-none"
+				disabled={isLoading}
+				required
+			/>
 		</div>
 
-		<AsyncStatus state={$peopleResource} onRetry={() => void feature.loadPeople()} />
-		<AsyncStatus state={$command} pendingLabel="Saving…" />
-		<form onsubmit={handleSubmit} class="space-y-4">
-			<div>
-				<label for="title" class="mb-1 block text-sm font-medium text-zinc-600">
-					Task Description *
-				</label>
-				<input
-					id="title"
-					type="text"
-					bind:value={title}
-					placeholder="Enter task description..."
-					class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black placeholder-zinc-500 focus:ring-2 focus:ring-borg-blue focus:outline-none"
-					disabled={isLoading}
-					required
-				/>
-			</div>
+		<div>
+			<label for="assignee" class="mb-1 block text-sm font-medium text-zinc-600"> Assign to </label>
+			<select
+				id="assignee"
+				bind:value={assignee}
+				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black focus:ring-2 focus:ring-borg-blue focus:outline-none"
+				disabled={isLoading}
+			>
+				<option value="">Unassigned</option>
+				{#each people as person}
+					<option value={person.id}>{person.name}</option>
+				{/each}
+			</select>
+		</div>
 
-			<div>
-				<label for="assignee" class="mb-1 block text-sm font-medium text-zinc-600">
-					Assign to
-				</label>
-				<select
-					id="assignee"
-					bind:value={assignee}
-					class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black focus:ring-2 focus:ring-borg-blue focus:outline-none"
-					disabled={isLoading}
-				>
-					<option value="">Unassigned</option>
-					{#each people as person}
-						<option value={person.id}>{person.name}</option>
-					{/each}
-				</select>
-			</div>
+		<div>
+			<label for="dueDate" class="mb-1 block text-sm font-medium text-zinc-600"> Due Date </label>
+			<input
+				id="dueDate"
+				type="date"
+				bind:value={dueDate}
+				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black focus:ring-2 focus:ring-borg-blue focus:outline-none"
+				disabled={isLoading}
+			/>
+		</div>
 
-			<div>
-				<label for="dueDate" class="mb-1 block text-sm font-medium text-zinc-600"> Due Date </label>
-				<input
-					id="dueDate"
-					type="date"
-					bind:value={dueDate}
-					class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black focus:ring-2 focus:ring-borg-blue focus:outline-none"
-					disabled={isLoading}
-				/>
-			</div>
+		<div>
+			<label for="notes" class="mb-1 block text-sm font-medium text-zinc-600"> Notes </label>
+			<textarea
+				id="notes"
+				bind:value={notes}
+				rows="3"
+				placeholder="Additional notes..."
+				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black placeholder-zinc-500 focus:ring-2 focus:ring-borg-blue focus:outline-none"
+				disabled={isLoading}
+			></textarea>
+		</div>
 
-			<div>
-				<label for="notes" class="mb-1 block text-sm font-medium text-zinc-600"> Notes </label>
-				<textarea
-					id="notes"
-					bind:value={notes}
-					rows="3"
-					placeholder="Additional notes..."
-					class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black placeholder-zinc-500 focus:ring-2 focus:ring-borg-blue focus:outline-none"
-					disabled={isLoading}
-				></textarea>
-			</div>
-
-			<div class="flex gap-3 pt-4">
-				<button
-					type="button"
-					onclick={onClose}
-					disabled={isLoading}
-					class="flex-1 rounded-lg bg-white px-4 py-2 text-black disabled:cursor-not-allowed disabled:opacity-60"
-				>
-					Cancel
-				</button>
-				<button
-					type="submit"
-					disabled={!title.trim() || isLoading}
-					class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-borg-orange px-4 py-2 text-white hover:bg-borg-orange disabled:cursor-not-allowed disabled:opacity-60"
-				>
-					{#if isLoading}
-						<div
-							class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-						></div>
-						Saving...
-					{:else}
-						{submitButtonText}
-					{/if}
-				</button>
-			</div>
-		</form>
-	</div>
-</div>
+		<div class="flex gap-3 pt-4">
+			<button
+				type="button"
+				onclick={onClose}
+				disabled={isLoading}
+				class="flex-1 rounded-lg bg-white px-4 py-2 text-black disabled:cursor-not-allowed disabled:opacity-60"
+			>
+				Cancel
+			</button>
+			<button
+				type="submit"
+				disabled={!title.trim() || isLoading}
+				class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-borg-orange px-4 py-2 text-white hover:bg-borg-orange disabled:cursor-not-allowed disabled:opacity-60"
+			>
+				{#if isLoading}
+					<div
+						class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+					></div>
+					Saving...
+				{:else}
+					{submitButtonText}
+				{/if}
+			</button>
+		</div>
+	</form>
+</dialog>

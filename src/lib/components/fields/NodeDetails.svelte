@@ -9,12 +9,17 @@
 	let {
 		fields = $bindable(),
 		data = $bindable(),
-		templateFields
+		templateFields,
+		hideLinks = false
 	} = $props<{
 		fields: TemplateField[];
 		data: Record<string, any>;
 		templateFields: TemplateField[];
+		hideLinks?: boolean;
 	}>();
+	let detailFields = $derived(
+		hideLinks ? fields.filter((field: TemplateField) => field.type !== 'link') : fields
+	);
 	let adding = $state(false);
 	let name = $state('');
 	let value = $state('');
@@ -70,7 +75,8 @@
 			field.id === id ? { ...field, showInDisplay: !(field.showInDisplay ?? true) } : field
 		);
 	}
-	function remove(field: TemplateField, index: number) {
+	function remove(field: TemplateField) {
+		const index = fields.findIndex((item: TemplateField) => item.id === field.id);
 		removed = { field, index, value: data[field.id], hadValue: Object.hasOwn(data, field.id) };
 		fields = fields.filter((item: TemplateField) => item.id !== field.id);
 		const remaining = { ...data };
@@ -104,9 +110,9 @@
 		</button>
 	</div>
 
-	{#if fields.length > 0}
+	{#if detailFields.length > 0}
 		<div class="mt-3 space-y-4">
-			{#each fields as field, index (field.id)}
+			{#each detailFields as field (field.id)}
 				{@const visible = field.showInDisplay ?? true}
 				<div role="group" aria-label={field.label}>
 					<FieldRenderer {field} bind:value={data[field.id]} mode="edit" nodeData={data}>
@@ -118,7 +124,7 @@
 							/>
 							<button
 								type="button"
-								onclick={() => remove(field, index)}
+								onclick={() => remove(field)}
 								aria-label={`Remove ${field.label}`}
 								title="Remove detail"
 								class="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"

@@ -3,7 +3,7 @@ export interface Project {
 	slug: string;
 	title: string;
 	description?: string;
-	status: 'active' | 'archived' | 'planning';
+	status: 'active' | 'archived' | 'planning' | 'Done';
 	createdAt: string;
 	updatedAt: string;
 	nodeCount: number;
@@ -13,5 +13,6 @@ export interface Project {
 		y: number;
 		zoom: number;
 	};
+	viewportPositions?: Record<string, { x: number; y: number; zoom: number }>;
 	outlineCollectionId?: string;
 }

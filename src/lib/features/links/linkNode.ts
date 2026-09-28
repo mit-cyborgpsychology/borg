@@ -103,6 +103,13 @@ const linkProviders: LinkProvider[] = [
 		label: 'Document'
 	},
 	{
+		id: 'qualtrics',
+		name: 'Qualtrics',
+		hosts: ['qualtrics.com'],
+		kind: 'website',
+		label: 'Survey'
+	},
+	{
 		id: 'youtube',
 		name: 'YouTube',
 		hosts: ['youtube.com', 'youtu.be'],
@@ -191,28 +198,62 @@ export function getLinkTitle(data: { title?: unknown; url?: unknown }): string {
 	);
 }
 
-/** Compatibility at the data boundary: keep every legacy field and secondary URL. */
+/** One display policy for extra links in cards and embeds; saved fields remain editable. */
+export function getVisibleSecondaryLinks(data: Record<string, any>): TemplateField[] {
+	const primaryUrl = data.fieldVisibility?.url === false ? '' : normalizeLinkUrl(data.url);
+	const fields: TemplateField[] = Array.isArray(data.customFields) ? data.customFields : [];
+	return fields.filter(
+		(field) =>
+			field.type === 'link' &&
+			(field.showInDisplay ?? true) &&
+			!!normalizeLinkUrl(data[field.id]) &&
+			(!primaryUrl || normalizeLinkUrl(data[field.id]) !== primaryUrl)
+	);
+}
+
+export const LINK_NODE_SCHEMA_VERSION = 1;
+
+const legacyLinkFields = [
+	'github',
+	'deepnote',
+	'arxiv',
+	'overleaf',
+	'publisher',
+	'website',
+	'google_docs',
+	'google_sheets',
+	'google_slides',
+	'google_drive',
+	'dropbox'
+];
+const linkContentFields = new Set(['url', 'title', 'description', 'status', 'viewMode']);
+
+/** Upgrade old nodes on read; the next content save persists the canonical shape. */
 export function normalizeLinkNode(type: string, data: Record<string, unknown>) {
 	if (canonicalNodeType(type) !== 'link') return { templateType: type, nodeData: data };
-	const customFields = Array.isArray(data.customFields)
-		? (data.customFields as TemplateField[]).filter(
-				(field) => !['url', 'title', 'description', 'status', 'viewMode'].includes(field.id)
-			)
-		: [];
-	const legacyUrls = [
-		'github',
-		'deepnote',
-		'arxiv',
-		'overleaf',
-		'publisher',
-		'website',
-		'google_docs',
-		'google_sheets',
-		'google_slides',
-		'google_drive',
-		'dropbox'
-	];
-	for (const id of legacyUrls) {
+	// Once upgraded, edits (including cleared, repeated, or removed URLs) are intentional.
+	if (
+		typeof data.linkSchemaVersion === 'number' &&
+		data.linkSchemaVersion >= LINK_NODE_SCHEMA_VERSION
+	) {
+		return { templateType: 'link', nodeData: data };
+	}
+
+	const savedFields: TemplateField[] = Array.isArray(data.customFields) ? data.customFields : [];
+	const customFields = savedFields
+		.filter((field) => !linkContentFields.has(field.id))
+		.map((field) => ({ ...field }));
+	const visibility = { ...(data.fieldVisibility as Record<string, boolean> | undefined) };
+	for (const field of savedFields) {
+		if (
+			linkContentFields.has(field.id) &&
+			visibility[field.id] === undefined &&
+			field.showInDisplay !== undefined
+		) {
+			visibility[field.id] = field.showInDisplay;
+		}
+	}
+	for (const id of legacyLinkFields) {
 		if (data[id] && !customFields.some((field) => field.id === id)) {
 			customFields.push({ id, label: id.replaceAll('_', ' '), type: 'link' });
 		}
@@ -225,25 +266,62 @@ export function normalizeLinkNode(type: string, data: Record<string, unknown>) {
 			options: ['Draft', 'Under Review', 'Accepted', 'Published']
 		});
 	}
-	const inferredUrl = [
-		...legacyUrls,
+
+	const candidates = [
+		...legacyLinkFields,
 		...customFields.filter((field) => field.type === 'link').map((field) => field.id)
-	]
-		.map((id) => data[id])
-		.find((value) => normalizeLinkUrl(value));
-	return {
-		templateType: 'link',
-		nodeData: {
-			...data,
-			// An explicitly cleared URL must stay cleared on subsequent reads.
-			url: typeof data.url === 'string' ? data.url : (inferredUrl ?? ''),
-			viewMode:
-				data.viewMode === 'Iframe' || data.viewMode === 'Node'
-					? data.viewMode
-					: type === 'iframe'
-						? 'Iframe'
-						: 'Node',
-			customFields
-		}
+	];
+	const primaryId = candidates.find((id) => normalizeLinkUrl(data[id]));
+	// An explicitly cleared or invalid primary URL stays available for editing.
+	const inferPrimary = typeof data.url !== 'string';
+	const rawUrl = inferPrimary ? (primaryId ? data[primaryId] : '') : data.url;
+	const primaryUrl = normalizeLinkUrl(rawUrl);
+	const primaryField = customFields.find(
+		(field) =>
+			field.type === 'link' && primaryUrl && normalizeLinkUrl(data[field.id]) === primaryUrl
+	);
+	if (primaryField && visibility.url === undefined) {
+		visibility.url = visibility[primaryField.id] ?? primaryField.showInDisplay ?? true;
+	}
+
+	const nodeData: Record<string, unknown> = {
+		...data,
+		url: primaryUrl || rawUrl,
+		viewMode:
+			data.viewMode === 'Iframe' || data.viewMode === 'Node'
+				? data.viewMode
+				: type === 'iframe'
+					? 'Iframe'
+					: 'Node',
+		linkSchemaVersion: LINK_NODE_SCHEMA_VERSION
 	};
+	const fields: TemplateField[] = [];
+	const seen = new Map<string, TemplateField>();
+	for (const field of customFields) {
+		if (field.type !== 'link') {
+			fields.push(field);
+			continue;
+		}
+		const visible = visibility[field.id] ?? field.showInDisplay ?? true;
+		const url = normalizeLinkUrl(data[field.id]);
+		const duplicate = url ? seen.get(url) : undefined;
+		if (url && (url === primaryUrl || duplicate)) {
+			// A visible copy keeps the URL visible after collapsing duplicate controls.
+			if (url === primaryUrl) visibility.url = (visibility.url ?? true) || visible;
+			else if (duplicate) duplicate.showInDisplay = (duplicate.showInDisplay ?? true) || visible;
+			delete nodeData[field.id];
+		} else {
+			field.showInDisplay = visible;
+			fields.push(field);
+			if (url) {
+				nodeData[field.id] = url;
+				seen.set(url, field);
+			}
+		}
+		// Extra links now store visibility alongside their field definition.
+		delete visibility[field.id];
+	}
+	nodeData.customFields = fields;
+	if (data.fieldVisibility || Object.keys(visibility).length) nodeData.fieldVisibility = visibility;
+	return { templateType: 'link', nodeData };
 }

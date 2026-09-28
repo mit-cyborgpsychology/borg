@@ -45,9 +45,10 @@ async function checkNodeDetails(sidebar, node) {
 	await node.getByText('Room 401', { exact: true }).waitFor();
 	await addDetail('Reference', 'arxiv.org/abs/1234.5678');
 	await node.getByRole('button', { name: 'Open arXiv', exact: true }).waitFor();
-	const reference = details
-		.getByRole('group', { name: 'Reference', exact: true })
-		.getByRole('textbox');
+	const reference = sidebar
+		.getByRole('region', { name: 'Link content', exact: true })
+		.locator('input[type="url"]')
+		.last();
 	if ((await reference.inputValue()) !== 'https://arxiv.org/abs/1234.5678')
 		throw new Error('detail URL was not normalized');
 	await addDetail('Deadline', '2028-02-29');
@@ -68,6 +69,55 @@ async function checkNodeDetails(sidebar, node) {
 		throw new Error('old custom property section remains');
 	console.log(
 		'details: creation, editing, empty values, visibility, removal/undo, URL detection and duplicate validation passed'
+	);
+}
+
+async function checkAdditionalLinks(sidebar, node) {
+	const links = sidebar.getByRole('region', { name: 'Link content', exact: true });
+	await links.getByRole('button', { name: 'Add link', exact: true }).click();
+	const second = links.getByLabel('URL 2', { exact: true });
+	if (!(await second.evaluate((input) => input === document.activeElement)))
+		throw new Error('Add link did not focus the new URL');
+	await second.fill('not a URL');
+	await second.blur();
+	await links.getByText('Invalid URL', { exact: true }).waitFor();
+	await second.fill('docs.google.com/document/d/extra');
+	await second.blur();
+	if ((await second.inputValue()) !== 'https://docs.google.com/document/d/extra')
+		throw new Error('additional link URL was not normalized');
+	await node.getByRole('button', { name: 'Open Google Docs', exact: true }).waitFor();
+	await links.getByRole('button', { name: 'Hide URL 2 on canvas', exact: true }).click();
+	await node
+		.getByRole('button', { name: 'Open Google Docs', exact: true })
+		.waitFor({ state: 'hidden' });
+	await links.getByRole('button', { name: 'Show URL 2 on canvas', exact: true }).click();
+	await node.getByRole('button', { name: 'Open Google Docs', exact: true }).waitFor();
+	await links.getByRole('button', { name: 'Add link', exact: true }).click();
+	await links.getByLabel('URL 3', { exact: true }).fill('https://miro.com/app/board/extra');
+	await node.getByRole('button', { name: 'Open Miro', exact: true }).waitFor();
+	await links.getByRole('button', { name: 'Remove URL 2', exact: true }).click();
+	await node
+		.getByRole('button', { name: 'Open Google Docs', exact: true })
+		.waitFor({ state: 'hidden' });
+	await node.getByRole('button', { name: 'Open Miro', exact: true }).waitFor();
+	await links.getByRole('button', { name: 'Undo', exact: true }).click();
+	await node.getByRole('button', { name: 'Open Google Docs', exact: true }).waitFor();
+	if (
+		(await links.getByLabel('URL 2', { exact: true }).inputValue()) !==
+		'https://docs.google.com/document/d/extra'
+	)
+		throw new Error('undo did not restore the link order and value');
+	await links.getByRole('button', { name: 'Remove URL 3', exact: true }).click();
+	await node.getByRole('button', { name: 'Open Miro', exact: true }).waitFor({ state: 'hidden' });
+	if (
+		await sidebar
+			.getByRole('region', { name: 'Details', exact: true })
+			.locator('input[type="url"]')
+			.count()
+	)
+		throw new Error('link inputs are duplicated in Details');
+	console.log(
+		'additional links: autofocus, validation, detection, visibility, removal and undo passed'
 	);
 }
 
@@ -142,6 +192,7 @@ async function checkLinkNode(canvasName, source = 'toolbar') {
 	await sidebar.getByRole('heading', { name: title, exact: true }).waitFor();
 	if (await sidebar.getByRole('textbox', { name: 'Title', exact: true }).count())
 		throw new Error('duplicate title input remains visible');
+	if (source === 'toolbar') await checkAdditionalLinks(sidebar, node);
 	if (canvasName === 'project' && source === 'toolbar') await checkNodeDetails(sidebar, node);
 	if (canvasName === 'project' && process.env.BORG_TEST_SCREENSHOT)
 		await page.screenshot({ path: process.env.BORG_TEST_SCREENSHOT });
@@ -150,6 +201,8 @@ async function checkLinkNode(canvasName, source = 'toolbar') {
 	await node.getByRole('button', { name: 'Open GitHub', exact: true }).waitFor();
 	await sidebar.getByRole('button', { name: 'Iframe', exact: true }).click();
 	await node.locator('iframe').waitFor();
+	if (source === 'toolbar')
+		await node.getByRole('button', { name: 'Open Google Docs', exact: true }).waitFor();
 	if (
 		(await node.locator('iframe').getAttribute('src')) !== 'https://github.com/example/repository'
 	)
@@ -159,6 +212,11 @@ async function checkLinkNode(canvasName, source = 'toolbar') {
 	await page.reload();
 	await node.getByText(title, { exact: true }).waitFor();
 	if (await node.locator('iframe').count()) throw new Error('view mode did not persist');
+	if (source === 'toolbar') {
+		await node.getByRole('button', { name: 'Open Google Docs', exact: true }).waitFor();
+		if (await node.getByRole('button', { name: 'Open Miro', exact: true }).count())
+			throw new Error('removed link returned after reload');
+	}
 	if (canvasName === 'project' && source === 'toolbar') {
 		await node.getByText('Room 401', { exact: true }).waitFor();
 		await node.getByRole('button', { name: 'Open arXiv', exact: true }).waitFor();
@@ -169,7 +227,33 @@ async function checkLinkNode(canvasName, source = 'toolbar') {
 	);
 }
 
-async function checkLegacyLinks() {
+async function checkLegacyLinks(projectSlug) {
+	let projectId = 'project-canvas';
+	if (projectSlug) {
+		const response = await fetch(
+			'http://127.0.0.1:8080/v1/projects/demo-borg/databases/(default)/documents:runQuery',
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json', Authorization: 'Bearer owner' },
+				body: JSON.stringify({
+					structuredQuery: {
+						from: [{ collectionId: 'projects' }],
+						where: {
+							fieldFilter: {
+								field: { fieldPath: 'slug' },
+								op: 'EQUAL',
+								value: { stringValue: projectSlug }
+							}
+						},
+						limit: 1
+					}
+				})
+			}
+		);
+		if (!response.ok) throw new Error(await response.text());
+		projectId = (await response.json())[0]?.document?.name.split('/').at(-1);
+		if (!projectId) throw new Error('Could not find the project for legacy fixtures');
+	}
 	const prefix = `legacy-link-${Date.now()}`;
 	const fixtures = [
 		[
@@ -182,22 +266,41 @@ async function checkLegacyLinks() {
 			}
 		],
 		['code', { title: `${prefix} code`, github: 'https://github.com/example/legacy' }],
+		[
+			'link',
+			{
+				title: `${prefix} link`,
+				url: 'https://arxiv.org/abs/1234.5678',
+				old_primary: 'arxiv.org/abs/1234.5678',
+				hidden_link: 'https://overleaf.com/project/hidden',
+				notes: 'Legacy notes',
+				status: 'Done',
+				locked: true,
+				fieldVisibility: { hidden_link: false },
+				customFields: [
+					{ id: 'old_primary', label: 'Paper', type: 'link' },
+					{ id: 'hidden_link', label: 'Draft', type: 'link' },
+					{ id: 'notes', label: 'Notes', type: 'textarea' }
+				]
+			}
+		],
 		['iframe', { title: `${prefix} iframe`, url: 'https://example.com', width: 620, height: 360 }]
 	];
-	const firestoreValue = (value) =>
-		typeof value === 'number'
-			? { integerValue: String(value) }
-			: typeof value === 'string'
-				? { stringValue: value }
-				: {
-						mapValue: {
-							fields: Object.fromEntries(
-								Object.entries(value).map(([key, item]) => [key, firestoreValue(item)])
-							)
-						}
-					};
+	const firestoreValue = (value) => {
+		if (typeof value === 'number') return { integerValue: String(value) };
+		if (typeof value === 'string') return { stringValue: value };
+		if (typeof value === 'boolean') return { booleanValue: value };
+		if (Array.isArray(value)) return { arrayValue: { values: value.map(firestoreValue) } };
+		return {
+			mapValue: {
+				fields: Object.fromEntries(
+					Object.entries(value).map(([key, item]) => [key, firestoreValue(item)])
+				)
+			}
+		};
+	};
 	for (const [type, nodeData] of fixtures) {
-		const docURL = `http://127.0.0.1:8080/v1/projects/demo-borg/databases/(default)/documents/projects/project-canvas/nodes/${prefix}-${type}`;
+		const docURL = `http://127.0.0.1:8080/v1/projects/demo-borg/databases/(default)/documents/projects/${projectId}/nodes/${prefix}-${type}`;
 		const record = {
 			type: 'universal',
 			templateType: type,
@@ -219,13 +322,38 @@ async function checkLegacyLinks() {
 			if (width !== '620px') throw new Error('legacy embed lost its dimensions');
 		} else {
 			await node.getByText(nodeData.title, { exact: true }).waitFor();
-			await node.getByText(type === 'paper' ? 'Paper' : 'Code', { exact: true }).waitFor();
+			await node.getByText(type === 'code' ? 'Code' : 'Paper', { exact: true }).waitFor();
 		}
-		if (type === 'paper') {
+		if (type === 'paper' || type === 'link') {
 			await node.getByText('Paper', { exact: true }).evaluate((element) => element.click());
 			const sidebar = page.getByRole('complementary');
-			if ((await sidebar.getByLabel('URL', { exact: true }).inputValue()) !== nodeData.arxiv)
+			if (
+				(await sidebar.getByLabel('URL', { exact: true }).inputValue()) !==
+				(nodeData.url || nodeData.arxiv)
+			)
 				throw new Error('legacy URL was not inferred');
+			const links = sidebar.getByRole('region', { name: 'Link content', exact: true });
+			if ((await links.locator('input[type="url"]').count()) !== 2)
+				throw new Error('legacy primary URL is duplicated in the editor');
+			if (
+				(await links.getByLabel('URL 2', { exact: true }).inputValue()) !==
+				(nodeData.overleaf || nodeData.hidden_link)
+			)
+				throw new Error('legacy secondary URL was lost');
+			if (type === 'link') {
+				await links.getByRole('button', { name: 'Show URL 2 on canvas', exact: true }).waitFor();
+				if (
+					(await sidebar
+						.getByRole('switch', { name: 'Done', exact: true })
+						.getAttribute('aria-checked')) !== 'true'
+				)
+					throw new Error('legacy completion state was lost');
+				await sidebar.getByRole('button', { name: 'Unlock node', exact: true }).waitFor();
+				await node.getByText('Legacy notes', { exact: true }).waitFor();
+				if (await node.getByRole('button', { name: 'Open Overleaf', exact: true }).count())
+					throw new Error('migration revealed a hidden link');
+			}
+
 			await sidebar.getByLabel('URL', { exact: true }).fill('https://github.com/example/converted');
 			await node.getByText('Code', { exact: true }).waitFor();
 			const stored = await (
@@ -233,13 +361,46 @@ async function checkLegacyLinks() {
 			).json();
 			if (
 				stored.fields.templateType.stringValue !== 'link' ||
-				stored.fields.nodeData.mapValue.fields.publicationStatus.stringValue !== 'Published'
+				stored.fields.nodeData.mapValue.fields.linkSchemaVersion.integerValue !== '1' ||
+				(type === 'paper' &&
+					stored.fields.nodeData.mapValue.fields.publicationStatus.stringValue !== 'Published')
 			)
 				throw new Error('legacy conversion lost metadata');
-			await sidebar.getByRole('button', { name: 'Close inspector', exact: true }).click();
+			await links.getByRole('button', { name: 'Remove URL 2', exact: true }).click();
+			await node
+				.getByRole('button', { name: 'Open Overleaf', exact: true })
+				.waitFor({ state: 'hidden' });
+			// Wait for the autosave to reach storage before checking a fresh read.
+			await page.waitForFunction(async (url) => {
+				const record = await (
+					await fetch(url, { headers: { Authorization: 'Bearer owner' } })
+				).json();
+				const data = record.fields.nodeData.mapValue.fields;
+				return !data.overleaf && !data.hidden_link && !data.arxiv && !data.old_primary;
+			}, docURL);
+			await sidebar.getByRole('status').filter({ hasText: 'Saving…' }).waitFor({ state: 'hidden' });
+			await page.reload();
+			await node.getByText('Code', { exact: true }).waitFor();
+			await node.getByText('Code', { exact: true }).evaluate((element) => element.click());
+			await sidebar.getByLabel('URL', { exact: true }).waitFor();
+			if ((await links.locator('input[type="url"]').count()) !== 1)
+				throw new Error('removed legacy URL returned after reload');
+			await links.getByRole('button', { name: 'Add link', exact: true }).click();
+			await links
+				.getByLabel('URL 2', { exact: true })
+				.fill('https://docs.google.com/document/d/legacy');
+			await node.getByRole('button', { name: 'Open Google Docs', exact: true }).waitFor();
+			await page
+				.getByRole('button', {
+					name: projectId === 'project-canvas' ? 'Close inspector' : 'Collapse sidebar',
+					exact: true
+				})
+				.click();
 		}
 	}
-	console.log('legacy paper/code/iframe rendering and lossless conversion passed');
+	console.log(
+		`${projectId}: legacy paper/code/iframe/link upgrades, deduplication, visibility, editing and reload persistence passed`
+	);
 }
 
 try {
@@ -329,6 +490,7 @@ try {
 	console.log('node persistence after reload passed');
 	await checkLinkNode('project');
 	await checkLinkNode('project', 'menu');
+	await checkLegacyLinks(decodeURIComponent(new URL(page.url()).pathname.split('/').at(-1)));
 	if (errors.length) throw new Error(errors.join('\n'));
 	console.log('PAGE_ERRORS', errors);
 } catch (error) {

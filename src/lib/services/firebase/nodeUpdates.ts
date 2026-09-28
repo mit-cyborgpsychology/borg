@@ -1,14 +1,25 @@
 import type { NodeUpdate } from '../../types/canvas';
+import { LINK_NODE_SCHEMA_VERSION, normalizeLinkNode } from '../../features/links/linkNode.ts';
+import { isFinitePosition } from '../../utils/canvasGeometry.ts';
 
 /** Maps the two existing editor payload shapes to one Firestore update. */
 export function buildNodeUpdate(update: NodeUpdate): Record<string, unknown> {
 	const fields: Record<string, unknown> = {};
-	if (update.position) fields.position = update.position;
+	if (update.position) {
+		if (!isFinitePosition(update.position))
+			throw new Error('Node position must contain finite coordinates');
+		fields.position = update.position;
+	}
 	if (update.data?.templateType) fields.templateType = update.data.templateType;
 	if (update.data?.projectSlug) fields.projectSlug = update.data.projectSlug;
 	const nodeData = update.data?.nodeData ?? update.nodeData;
 	if (nodeData) {
-		fields.nodeData = nodeData;
+		const type =
+			update.data?.templateType ??
+			(nodeData.linkSchemaVersion === LINK_NODE_SCHEMA_VERSION ? 'link' : undefined);
+		const normalized = type ? normalizeLinkNode(type, nodeData) : undefined;
+		fields.nodeData = normalized?.nodeData ?? nodeData;
+		if (normalized) fields.templateType = normalized.templateType;
 		// Clearing the nested status must also clear the project summary field.
 		fields.status = nodeData.status || null;
 	}

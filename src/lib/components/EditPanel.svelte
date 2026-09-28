@@ -242,7 +242,7 @@
 <div class="inspector-fields min-h-0 flex-1 overflow-y-auto overscroll-contain text-xs">
 	{#if template.id === 'link'}
 		{#key nodeId}
-			<LinkSettings bind:value={editableData}>
+			<LinkSettings bind:value={editableData} bind:fields={customFields}>
 				{#snippet fieldActions(id: string)}
 					{@const field = template.fields.find((field: TemplateField) => field.id === id)}
 					{#if field}{@render fieldVisibility(field)}{/if}
@@ -293,6 +293,7 @@
 			bind:fields={customFields}
 			bind:data={editableData}
 			templateFields={template.fields}
+			hideLinks={template.id === 'link'}
 		/>
 	{/key}
 </div>

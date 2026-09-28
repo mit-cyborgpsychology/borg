@@ -1,27 +1,16 @@
 <script lang="ts">
 	import { getAppServices } from '$lib/app/context';
-	import {
-		FolderOpen,
-		Users,
-		Calendar,
-		CheckSquare,
-		LogOut,
-		BookOpen,
-		User,
-		ExternalLink,
-		FileText
-	} from '@lucide/svelte';
-	import { goto } from '$app/navigation';
+	import { FolderOpen, Users, Calendar, CheckSquare, LogOut, User, Library } from '@lucide/svelte';
 	import ProjectsTab from './browser/ProjectsTab.svelte';
 	import PeopleTab from './browser/PeopleTab.svelte';
 	import TimelineTab from './browser/TimelineTab.svelte';
 	import TaskTab from './browser/TaskTab.svelte';
 	import PersonalTab from './browser/PersonalTab.svelte';
-	import DocsTab from './browser/DocsTab.svelte';
+	import ResearchTab from './browser/ResearchTab.svelte';
 	import PresenceAvatars from './PresenceAvatars.svelte';
 
 	const { authService, authStore } = getAppServices();
-	type Tab = 'projects' | 'people' | 'timeline' | 'tasks' | 'personal' | 'docs' | 'resources';
+	type Tab = 'projects' | 'people' | 'timeline' | 'tasks' | 'personal' | 'references';
 
 	let activeTab = $state<Tab>('projects');
 	let viewMode = $state<'list' | 'canvas'>('canvas');
@@ -44,7 +33,7 @@
 <div class="flex h-full min-h-screen w-full flex-col bg-white">
 	<!-- Top Nav -->
 	<div
-		class="fixed top-0 right-0 left-0 z-50 flex h-12 items-center gap-1 border-b border-zinc-200 bg-white px-3"
+		class="fixed top-0 right-0 left-0 z-50 flex h-12 items-center gap-1 overflow-x-auto border-b border-zinc-200 bg-white px-3 [&>button]:shrink-0"
 	>
 		<!-- Logo -->
 		<img src="BORG.svg" class="mr-3 h-5" alt="" />
@@ -108,24 +97,15 @@
 		</button>
 
 		<button
-			onclick={() => setActiveTab('docs')}
+			onclick={() => setActiveTab('references')}
+			aria-pressed={activeTab === 'references'}
 			class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors {activeTab ===
-			'docs'
+			'references'
 				? 'bg-zinc-100 font-medium text-zinc-800'
 				: 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700'}"
 		>
-			<FileText class="h-4 w-4" />
-			Docs
-		</button>
-
-		<button
-			onclick={() => window.open('https://borg.cyborglab.org/project/lab-resources', '_blank')}
-			class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
-		>
-			<BookOpen class="h-4 w-4" />
-			<span class="flex items-center gap-1"
-				>Resources <ExternalLink strokeWidth={2.5} class="h-3 w-3" /></span
-			>
+			<Library class="h-4 w-4" />
+			References
 		</button>
 
 		<!-- Spacer -->
@@ -160,8 +140,8 @@
 				<TaskTab {activeTab} />
 			{:else if activeTab === 'personal'}
 				<PersonalTab {activeTab} />
-			{:else if activeTab === 'docs'}
-				<DocsTab {activeTab} />
+			{:else if activeTab === 'references'}
+				<ResearchTab />
 			{/if}
 		</div>
 	</div>

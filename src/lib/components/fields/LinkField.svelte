@@ -22,6 +22,7 @@
 	{#if mode === 'display'}
 		{#if link.url}
 			<button
+				title={link.url}
 				onclick={(event) => {
 					event.stopPropagation();
 					window.open(link.url, '_blank', 'noopener,noreferrer');

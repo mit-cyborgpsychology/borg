@@ -83,20 +83,20 @@
 	{#if imageError}
 		<!-- Error placeholder -->
 		<div
-			class="flex h-16 w-16 items-center justify-center rounded-lg border border-red-200 bg-red-50"
+			class="flex aspect-square w-full items-center justify-center rounded-lg border border-red-200 bg-red-50"
 		>
 			<span class="text-xs text-red-500">✗</span>
 		</div>
 	{:else if !imageUrl}
 		<!-- Loading URL placeholder -->
 		<div
-			class="flex h-16 w-16 items-center justify-center rounded-lg border border-gray-200 bg-gray-100"
+			class="flex aspect-square w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-100"
 		>
 			<div class="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-black"></div>
 		</div>
 	{:else}
 		<!-- Image container with loading overlay -->
-		<div class="relative h-16 w-16">
+		<div class="relative aspect-square w-full">
 			<!-- Loading spinner overlay (shown while image loads) -->
 			{#if !imageLoaded}
 				<div
@@ -112,7 +112,7 @@
 			<img
 				src={imageUrl}
 				alt=""
-				class="h-16 w-16 rounded-lg object-contain transition-all duration-200 group-hover:scale-105 {imageLoaded
+				class="h-full w-full rounded-lg object-contain transition-all duration-200 group-hover:scale-105 {imageLoaded
 					? 'opacity-100'
 					: 'opacity-0'}"
 				onload={handleImageLoad}

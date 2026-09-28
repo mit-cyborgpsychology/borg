@@ -12,6 +12,7 @@ import { FirebaseProfileService } from '../services/firebase/FirebaseProfileServ
 import { FirebaseImageService } from '../services/firebase/FirebaseImageService';
 import { createNodeLookup } from '../services/firebase/FirebaseNodeLookup';
 import { OutlineService } from '../services/OutlineService';
+import { ResearchService } from '../services/ResearchService';
 import { createTaskContext } from '../services/taskContext';
 import { createPeopleCache } from '../stores/peopleCache.svelte';
 import { compressImageFile } from '../utils/resizeImage';
@@ -40,6 +41,7 @@ export function createAppServices(): AppServices {
 		userService: new FirebaseUserService(db),
 		stickerService: new FirebaseStickerService(storage),
 		outlineService: new OutlineService(projectsService, readSession),
+		researchService: new ResearchService(readSession),
 		profileService: new FirebaseProfileService(db),
 		imageService: new FirebaseImageService(storage, compressImageFile),
 		peopleCache: createPeopleCache(peopleService),

@@ -16,6 +16,7 @@ import type { IImageService } from '../services/interfaces/IImageService';
 import type { IProfileService } from '../services/interfaces/IProfileService';
 import type { createPeopleCache } from '../stores/peopleCache.svelte';
 import type { createTaskContext } from '../services/taskContext';
+import type { IResearchService } from '../services/interfaces/IResearchService';
 
 export interface AppServices {
 	presenceService: IPresenceService;
@@ -29,6 +30,7 @@ export interface AppServices {
 	userService: IUserService;
 	stickerService: IStickerService;
 	outlineService: IOutlineService;
+	researchService: IResearchService;
 	profileService: IProfileService;
 	imageService: IImageService;
 	peopleCache: ReturnType<typeof createPeopleCache>;

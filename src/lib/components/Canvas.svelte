@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { getTemplate } from '$lib/templates';
 	import { getLinkTitle } from '$lib/features/links/linkNode';
+	import {
+		isFinitePosition,
+		readCanvasViewport,
+		MIN_CANVAS_ZOOM,
+		MAX_CANVAS_ZOOM
+	} from '$lib/utils/canvasGeometry';
 	import { projectToolbarItems } from './nodeCreationItems';
 	import { Square } from '@lucide/svelte';
 	import NodeCreationMenu from '$lib/components/NodeCreationMenu.svelte';
@@ -59,6 +65,7 @@
 	import EditPanel from './EditPanel.svelte';
 	import NodeTaskSidebar from './tasks/NodeTaskSidebar.svelte';
 	import TaskModal from './tasks/TaskModal.svelte';
+	import TaskList from './tasks/TaskList.svelte';
 	import Toolbar from './Toolbar.svelte';
 	import StickerPanel from './stickers/StickerPanel.svelte';
 	import Cursor from './Cursor.svelte';
@@ -134,8 +141,7 @@
 	let showNodeTaskSidebar = $state(false);
 	let taskSidebarNodeId = $state('');
 	let taskSidebarNodeTitle = $state('');
-	let taskSidebarTasks = $state<Task[]>([]);
-	let taskSubscriptionCleanup: (() => void) | null = null;
+	let taskSidebarTasks = $derived(projectStore.tasksByNode.get(taskSidebarNodeId) ?? []);
 
 	// Search state
 	let searchQuery = $state('');
@@ -147,12 +153,9 @@
 	let taskModalNodeId = $state('');
 	let taskModalTask = $state<Task | undefined>(undefined); // undefined for add mode, Task for edit mode
 
-	// Sticker panel state
-	let showStickerPanel = $state(false);
-
 	// Right sidebar toggle state
 	let showRightSidebar = $state(true);
-	let sidebarTab = $state<'nodes' | 'tasks'>('nodes');
+	let sidebarTab = $state<'nodes' | 'tasks' | 'stickers'>('nodes');
 
 	// Selection state
 	let selectedNodes = $state<Node[]>([]);
@@ -311,19 +314,15 @@
 		}
 
 		try {
-			const viewport = getViewport();
-			const viewportData = {
-				x: viewport.x,
-				y: viewport.y,
-				zoom: viewport.zoom
-			};
+			const viewportData = readCanvasViewport(getViewport());
+			if (!viewportData) return;
 
 			// Get existing project data to preserve existing viewport positions
 			const projectResult = projectsService.getProject(projectSlug);
 			const project = await projectResult;
 
 			// Get existing viewport positions object, or create new one
-			const existingViewportPositions = (project as any)?.viewportPositions || {};
+			const existingViewportPositions = project?.viewportPositions || {};
 
 			// Update viewport position for current user
 			const updatedViewportPositions = {
@@ -334,7 +333,7 @@
 			// Save to Firebase using projects service
 			await projectsService.updateProject(projectSlug, {
 				viewportPositions: updatedViewportPositions
-			} as any);
+			});
 			console.log('Canvas: Saved viewport position for user:', currentUser.uid, viewportData);
 		} catch (error) {
 			console.error('Canvas: Failed to save viewport position:', error);
@@ -363,7 +362,9 @@
 			const project = await projectResult;
 
 			// Check for user-specific viewport position
-			const userViewportPosition = (project as any)?.viewportPositions?.[currentUser.uid];
+			const userViewportPosition = readCanvasViewport(
+				project?.viewportPositions?.[currentUser.uid]
+			);
 
 			if (userViewportPosition) {
 				const { x, y, zoom } = userViewportPosition;
@@ -410,40 +411,20 @@
 		showEditPanel = true;
 		// Close other panels if open to avoid conflicts
 		showNodeTaskSidebar = false;
-		showStickerPanel = false;
 		// Notify parent to close other panels
 		onPanelOpen?.();
 	};
 
 	const handleNodeTasksOpenEvent = (payload: CanvasPayloads['nodeTasksOpen']) => {
-		// Clean up previous subscription if any
-		if (taskSubscriptionCleanup) {
-			taskSubscriptionCleanup();
-			taskSubscriptionCleanup = null;
-		}
-
 		taskSidebarNodeId = payload.nodeId;
 		taskSidebarNodeTitle = payload.nodeTitle;
-		taskSidebarTasks = payload.tasks;
 		showNodeTaskSidebar = true;
 		// Notify parent to close other panels
 		onPanelOpen?.();
 
-		// Set up real-time subscription if available
-		if (taskService.subscribeToNodeTasks) {
-			taskSubscriptionCleanup = taskService.subscribeToNodeTasks(
-				payload.nodeId,
-				(updatedTasks) => {
-					console.log('Real-time task update:', updatedTasks);
-					taskSidebarTasks = [...updatedTasks];
-				},
-				projectSlug
-			);
-		}
-
 		// Close other panels if open to avoid conflicts
 		showEditPanel = false;
-		showStickerPanel = false;
+		if (sidebarTab === 'stickers') sidebarTab = 'nodes';
 	};
 
 	const handleAddTaskEvent = (payload: CanvasPayloads['addTask']) => {
@@ -462,6 +443,11 @@
 		nodeEdit: handleNodeEditEvent,
 		nodeTasksOpen: handleNodeTasksOpenEvent,
 		addTask: handleAddTaskEvent,
+		editTask: ({ nodeId, task }) => {
+			taskModalNodeId = nodeId;
+			taskModalTask = task;
+			showTaskModal = true;
+		},
 		addSticker: handleAddStickerEvent
 	});
 
@@ -511,12 +497,6 @@
 			clearTimeout(initialNodeTimeout);
 			clearTimeout(saveTimeout);
 			clearTimeout(viewportSaveTimeout);
-
-			// Clean up task subscription
-			if (taskSubscriptionCleanup) {
-				taskSubscriptionCleanup();
-				taskSubscriptionCleanup = null;
-			}
 		};
 	});
 
@@ -618,21 +598,18 @@
 	}
 
 	function handleShowStickers() {
-		console.log('🎨 handleShowStickers called, current state:', showStickerPanel);
-		// Close other drawers/panels when opening sticker panel
+		showRightSidebar = true;
+		sidebarTab = 'stickers';
 		showEditPanel = false;
 		showNodeTaskSidebar = false;
-		showStickerPanel = true;
-		// Notify parent to close other panels
 		onPanelOpen?.();
-		console.log('🎨 showStickerPanel set to:', showStickerPanel);
 	}
 
 	function handleCloseCanvasPanels() {
 		console.log('🎨 handleCloseCanvasPanels called - closing all Canvas panels');
 		showEditPanel = false;
 		showNodeTaskSidebar = false;
-		showStickerPanel = false;
+		if (sidebarTab === 'stickers') sidebarTab = 'nodes';
 	}
 
 	// Handle add sticker event (click-based)
@@ -816,25 +793,9 @@
 		void saveCanvas();
 	}
 
-	// Function to refresh task sidebar data only (no global event spam)
-	async function handleTasksUpdated() {
-		console.log('Canvas: handleTasksUpdated called - refreshing sidebar only');
-
-		// Only refresh the sidebar if it's open - no global event spam
-		if (showNodeTaskSidebar && taskSidebarNodeId && taskService) {
-			console.log('Canvas: Refreshing sidebar tasks for node:', taskSidebarNodeId);
-			const tasksResult = taskService.getNodeTasks(taskSidebarNodeId, projectSlug);
-			const updatedTasks = await tasksResult;
-			console.log('Canvas: Updated sidebar tasks:', updatedTasks.length);
-			taskSidebarTasks = [...updatedTasks];
-		}
-	}
-
 	// Handle task modal completion
 	function handleTaskModalComplete() {
 		showTaskModal = false;
-		// Refresh task sidebar if it's open and refresh nodes
-		handleTasksUpdated();
 	}
 
 	async function createSyncedProjectNode(position: { x: number; y: number }) {
@@ -990,13 +951,14 @@
 
 	// Focus a node in the viewport and open its inspector
 	function focusNode(node: Node) {
-		fitView({ nodes: [node], duration: 400, padding: 0.5 });
+		if (isFinitePosition(node.position))
+			void fitView({ nodes: [node], duration: 400, padding: 0.5 });
 		editNodeId = node.id;
 		editNodeData = node.data?.nodeData || {};
 		editTemplateType = (node.data?.templateType as string) || 'blank';
 		showEditPanel = true;
 		showNodeTaskSidebar = false;
-		showStickerPanel = false;
+		if (sidebarTab === 'stickers') sidebarTab = 'nodes';
 	}
 
 	// Filtered node list (exclude stickers and images from the list)
@@ -1004,7 +966,7 @@
 		nodes.filter((n) => n.data?.templateType !== 'sticker' && n.data?.templateType !== 'image')
 	);
 
-	// Active tasks grouped by node for sidebar (sidebar-display shape, distinct
+	// Tasks grouped by node for sidebar (sidebar-display shape, distinct
 	// from projectStore.tasksByNode which UniversalNode reads for badge counts)
 	let activeTasks = $derived(projectStore.tasks.filter((t) => (t.status || 'active') === 'active'));
 	// Live node titles from the already-subscribed nodes array, so the
@@ -1016,7 +978,7 @@
 		return map;
 	});
 	let sidebarTasksByNode = $derived(
-		activeTasks.reduce(
+		projectStore.tasks.reduce(
 			(acc, task) => {
 				if (!acc[task.nodeId]) {
 					const nodeTitle = liveNodeTitles.get(task.nodeId) ?? task.nodeTitle ?? 'Untitled';
@@ -1124,7 +1086,8 @@
 				nodesDraggable={true}
 				nodesConnectable={true}
 				elevateNodesOnSelect={true}
-				minZoom={0.3}
+				minZoom={MIN_CANVAS_ZOOM}
+				maxZoom={MAX_CANVAS_ZOOM}
 				deleteKey={['Delete', 'Backspace']}
 				panOnDrag={false}
 				panOnScroll={true}
@@ -1166,22 +1129,8 @@
 					nodeTitle={taskSidebarNodeTitle}
 					{projectSlug}
 					tasks={taskSidebarTasks}
-					onClose={() => {
-						if (taskSubscriptionCleanup) {
-							taskSubscriptionCleanup();
-							taskSubscriptionCleanup = null;
-						}
-						showNodeTaskSidebar = false;
-					}}
-					onTasksUpdated={handleTasksUpdated}
+					onClose={() => (showNodeTaskSidebar = false)}
 				/>
-			</div>
-		{/if}
-
-		<!-- Sticker Panel (overlay on canvas) -->
-		{#if showStickerPanel}
-			<div class="absolute inset-y-0 right-0 z-40 flex">
-				<StickerPanel bind:isOpen={showStickerPanel} onClose={() => (showStickerPanel = false)} />
 			</div>
 		{/if}
 	</div>
@@ -1229,6 +1178,12 @@
 								: 'text-zinc-400 hover:text-zinc-600'}"
 							>Tasks{#if activeTasks.length > 0}
 								({activeTasks.length}){/if}</button
+						>
+						<button
+							onclick={handleShowStickers}
+							class="flex-1 rounded py-1 font-medium transition-colors {sidebarTab === 'stickers'
+								? 'bg-white text-zinc-900 shadow-sm'
+								: 'text-zinc-400 hover:text-zinc-600'}">Stickers</button
 						>
 					</div>
 					<!-- Search (nodes tab only) -->
@@ -1296,11 +1251,13 @@
 				</div>
 
 				<!-- Content -->
-				{#if sidebarTab === 'tasks'}
+				{#if sidebarTab === 'stickers'}
+					<StickerPanel onClose={() => (sidebarTab = 'nodes')} />
+				{:else if sidebarTab === 'tasks'}
 					<!-- Task list -->
 					<div class="min-h-0 flex-1 overflow-y-auto">
-						{#if activeTasks.length === 0}
-							<p class="p-4 text-center text-xs text-zinc-400">No active tasks</p>
+						{#if projectStore.tasks.length === 0}
+							<p class="p-4 text-center text-xs text-zinc-400">Add a task below any node</p>
 						{:else}
 							<div class="space-y-5 p-4">
 								{#each Object.entries(sidebarTasksByNode) as [nodeId, nodeGroup] (nodeId)}
@@ -1308,25 +1265,7 @@
 										<p class="mb-2 px-1 text-xs font-semibold text-zinc-800">
 											{nodeGroup.nodeTitle}
 										</p>
-										{#each nodeGroup.tasks as task (task.id)}
-											<div
-												class="flex items-start gap-2 rounded px-1 py-1.5 text-xs hover:bg-zinc-50"
-											>
-												<button
-													onclick={async () => {
-														const result = taskService.resolveTask(
-															task.nodeId,
-															task.id,
-															task.projectSlug
-														);
-														await result;
-													}}
-													class="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-zinc-300 hover:border-green-500 hover:bg-green-50"
-													aria-label="Mark task as complete"
-												></button>
-												<span class="text-zinc-700">{task.title}</span>
-											</div>
-										{/each}
+										<TaskList tasks={nodeGroup.tasks} {nodeId} {projectSlug} />
 									</div>
 								{/each}
 							</div>

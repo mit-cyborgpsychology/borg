@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/svelte';
 import { describeLink } from '../features/links/linkNode.ts';
+import { isFinitePosition } from './canvasGeometry.ts';
 
 export interface SearchState {
 	query: string;
@@ -79,7 +80,7 @@ export function navigateToMatch(
 
 	const nodeId = state.matchingNodeIds[state.currentMatchIndex];
 	const node = nodes.find((n) => n.id === nodeId);
-	if (node && node.position) {
+	if (node && isFinitePosition(node.position)) {
 		setViewport(
 			{ x: -node.position.x + 400, y: -node.position.y + 300, zoom: 1 },
 			{ duration: 300 }

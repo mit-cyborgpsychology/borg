@@ -1,68 +1,110 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
-	import { describeLink, normalizeLinkUrl } from '$lib/features/links/linkNode';
-	import LinkIcon from './LinkIcon.svelte';
-	import { Square, PanelsTopLeft } from '@lucide/svelte';
+	import type { TemplateField } from '$lib/templates';
+	import LinkUrlInput from './LinkUrlInput.svelte';
+	import FieldVisibilityToggle from './FieldVisibilityToggle.svelte';
+	import { Square, PanelsTopLeft, Plus, X, Undo2 } from '@lucide/svelte';
 
-	let { value = $bindable(), fieldActions } = $props<{
-		value: { url?: string; description?: string; viewMode?: string };
+	let {
+		value = $bindable(),
+		fields = $bindable(),
+		fieldActions
+	} = $props<{
+		value: Record<string, any>;
+		fields: TemplateField[];
 		fieldActions?: Snippet<[fieldId: string]>;
 	}>();
-	let link = $derived(describeLink(value.url));
-	let urlTouched = $state(false);
-	let invalidUrl = $derived(urlTouched && !!value.url?.trim() && !link.url);
+	let links = $derived(fields.filter((field: TemplateField) => field.type === 'link'));
+	let addButton = $state<HTMLButtonElement>();
+	let removed = $state<{ field: TemplateField; value: unknown; index: number } | null>(null);
 
-	function focusEmptyUrl(input: HTMLInputElement) {
-		if (!value.url) {
-			void tick().then(() => {
-				if (input.isConnected) input.focus({ preventScroll: true });
-			});
-		}
+	async function addLink() {
+		const id = `link_${crypto.randomUUID()}`;
+		fields = [...fields, { id, label: 'Link', type: 'link', showInDisplay: true }];
+		value = { ...value, [id]: '' };
+		removed = null;
+		await tick();
+		document.getElementById(id)?.focus();
 	}
 
-	function normalizeUrl() {
-		urlTouched = true;
-		const normalized = normalizeLinkUrl(value.url);
-		if (normalized) value.url = normalized;
+	function toggleVisibility(id: string) {
+		fields = fields.map((field: TemplateField) =>
+			field.id === id ? { ...field, showInDisplay: !(field.showInDisplay ?? true) } : field
+		);
+	}
+
+	async function removeLink(field: TemplateField) {
+		removed = {
+			field,
+			value: value[field.id],
+			index: fields.findIndex((item: TemplateField) => item.id === field.id)
+		};
+		fields = fields.filter((item: TemplateField) => item.id !== field.id);
+		const remaining = { ...value };
+		delete remaining[field.id];
+		value = remaining;
+		await tick();
+		addButton?.focus();
+	}
+
+	async function undoRemove() {
+		if (!removed) return;
+		const { field, value: url, index } = removed;
+		const next = [...fields];
+		next.splice(index, 0, field);
+		fields = next;
+		value = { ...value, [field.id]: url ?? '' };
+		removed = null;
+		await tick();
+		document.getElementById(field.id)?.focus();
 	}
 </script>
 
 <section class="border-b border-zinc-200 px-4 py-4" aria-label="Link content">
 	<div class="space-y-3">
-		<div>
-			<div class="mb-1 flex min-h-5 items-center justify-between gap-2">
-				<label for="url" class="!mb-0">URL</label>
-				<div class="flex max-w-[75%] min-w-0 items-center gap-2">
-					<span aria-live="polite" class="min-w-0">
-						{#if link.url}
-							<span
-								title={`${link.providerName} · ${link.label}`}
-								class="flex items-center gap-1.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500"
-							>
-								<LinkIcon url={value.url} size="h-3 w-3" /><span class="truncate"
-									>{link.providerName}</span
-								>
-							</span>
-						{/if}
-					</span>
-					{@render fieldActions?.('url')}
+		<LinkUrlInput id="url" bind:value={value.url} focusWhenEmpty>
+			{#snippet actions()}{@render fieldActions?.('url')}{/snippet}
+		</LinkUrlInput>
+		{#each links as field, index (field.id)}
+			{@const label = `URL ${index + 2}`}
+			<LinkUrlInput id={field.id} {label} bind:value={value[field.id]}>
+				{#snippet actions()}
+					<FieldVisibilityToggle
+						{label}
+						visible={field.showInDisplay ?? true}
+						ontoggle={() => toggleVisibility(field.id)}
+					/>
+					<button
+						type="button"
+						aria-label={`Remove ${label}`}
+						title="Remove link"
+						onclick={() => removeLink(field)}
+						class="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+						><X class="h-3 w-3" /></button
+					>
+				{/snippet}
+			</LinkUrlInput>
+		{/each}
+		<div class="flex items-center justify-between gap-2">
+			<button
+				bind:this={addButton}
+				type="button"
+				onclick={addLink}
+				class="flex items-center gap-1 rounded py-1 text-xs text-zinc-500 hover:text-zinc-900 focus-visible:outline-2 focus-visible:outline-zinc-400"
+				><Plus class="h-3 w-3" />Add link</button
+			>
+			{#if removed}
+				<div role="status" class="flex items-center gap-2 text-[11px] text-zinc-500">
+					<span>Link removed</span>
+					<button
+						type="button"
+						onclick={undoRemove}
+						class="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-zinc-100"
+					>
+						<Undo2 class="h-3 w-3" />Undo
+					</button>
 				</div>
-			</div>
-			<input
-				id="url"
-				use:focusEmptyUrl
-				type="url"
-				bind:value={value.url}
-				onblur={normalizeUrl}
-				spellcheck={false}
-				placeholder="Paste a link…"
-				aria-invalid={invalidUrl}
-				aria-describedby={invalidUrl ? 'link-url-error' : undefined}
-				class="w-full rounded border px-2 py-1.5 outline-none aria-invalid:!border-amber-600"
-			/>
-			{#if invalidUrl}<p id="link-url-error" role="status" class="mt-1 text-[11px] text-amber-700">
-					Invalid URL
-				</p>{/if}
+			{/if}
 		</div>
 		<div>
 			<div class="mb-1 flex min-h-5 items-center justify-between gap-2">

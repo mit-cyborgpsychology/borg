@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { describeLink, normalizeLinkUrl } from '$lib/features/links/linkNode';
+	import { describeLink } from '$lib/features/links/linkNode';
 	import { hasDetailValue } from '$lib/features/canvas/nodeDetails';
 	import FieldRenderer from '../../fields/FieldRenderer.svelte';
 	import TitleEditor from './TitleEditor.svelte';
+	import SecondaryLinks from './SecondaryLinks.svelte';
 	import type { NodeTemplate, TemplateField } from '../../../templates';
 
 	let {
@@ -22,12 +23,6 @@
 		onNodeClick?: () => void;
 		isBeingEdited?: boolean;
 	}>();
-
-	let displayedLinkUrl = $derived(
-		template.id === 'link' && (nodeData.fieldVisibility?.url ?? true)
-			? normalizeLinkUrl(nodeData.url)
-			: ''
-	);
 
 	// Cards lead with content; the editor keeps URL first for pasting a link.
 	let displayFields = $derived(
@@ -113,15 +108,14 @@
 					{/if}
 				{/if}
 			{/each}
+			{#if template.id === 'link'}
+				<SecondaryLinks {nodeData} />
+			{/if}
 
 			{#if nodeData.customFields && Array.isArray(nodeData.customFields)}
 				{#each nodeData.customFields as field}
 					{@const isVisible = field.showInDisplay ?? true}
-					{@const duplicatesPrimaryLink =
-						field.type === 'link' &&
-						displayedLinkUrl &&
-						normalizeLinkUrl(nodeData[field.id]) === displayedLinkUrl}
-					{#if isVisible && field.id !== 'status' && !duplicatesPrimaryLink && (field.type === 'button' || hasDetailValue(nodeData[field.id]))}
+					{#if isVisible && field.id !== 'status' && !(template.id === 'link' && field.type === 'link') && (field.type === 'button' || hasDetailValue(nodeData[field.id]))}
 						{#if field.id === 'title'}
 							<TitleEditor
 								{nodeData}

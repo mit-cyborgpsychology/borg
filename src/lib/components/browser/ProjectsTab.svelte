@@ -210,7 +210,7 @@
 				<ProjectsCanvas
 					projects={projects.filter((p) => p.id !== 'project-canvas')}
 					onProjectClick={handleOpenProject}
-					onProjectUpdate={() => void loadProjects(true)}
+					onProjectUpdate={() => loadProjects(true)}
 					onCreateProject={() => (showCreateModal = true)}
 					bind:viewMode
 				/>

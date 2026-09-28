@@ -72,6 +72,7 @@
 	<div
 		class="group relative max-w-64 min-w-48 cursor-pointer rounded-lg border bg-white transition-all duration-200"
 		style="border-color: {borderColor};"
+		style:opacity={nodeData.status === 'Done' ? 0.3 : 1}
 		onclick={handleNodeClick}
 	>
 		<div class="flex flex-col gap-1 p-2">

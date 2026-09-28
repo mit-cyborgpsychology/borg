@@ -6,8 +6,9 @@ export interface CanvasPayloads {
 	nodeDelete: { nodeId: string };
 	nodeUpdate: { nodeId: string; data: NodeUpdate };
 	nodeEdit: { nodeId: string; nodeData: Record<string, unknown>; templateType: string };
-	nodeTasksOpen: { nodeId: string; nodeTitle: string; tasks: Task[] };
+	nodeTasksOpen: { nodeId: string; nodeTitle: string };
 	addTask: { nodeId: string };
+	editTask: { nodeId: string; task: Task };
 	addSticker: {
 		type: string;
 		stickerUrl: string;

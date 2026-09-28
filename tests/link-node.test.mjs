@@ -3,12 +3,15 @@ import { test } from 'node:test';
 import {
 	describeLink,
 	getLinkTitle,
+	getVisibleSecondaryLinks,
+	LINK_NODE_SCHEMA_VERSION,
 	normalizeLinkNode,
 	normalizeLinkUrl
 } from '../src/lib/features/links/linkNode.ts';
 import { getTemplate, nodeTemplates } from '../src/lib/templates.ts';
 import { createNodeService } from '../src/lib/services/NodeService.ts';
 import { updateMatchingNodes } from '../src/lib/utils/canvasSearch.ts';
+import { buildNodeUpdate } from '../src/lib/services/firebase/nodeUpdates.ts';
 
 test('link detection uses the hostname and path, not substrings in arbitrary URLs', () => {
 	for (const [url, label] of [
@@ -130,6 +133,175 @@ test('legacy iframes keep their view and dimensions and cleared URLs stay cleare
 	assert.equal(normalizeLinkNode('note', data).nodeData, data);
 });
 
+test('old URL fields become one primary and distinct extra links without stale aliases', () => {
+	const original = {
+		title: 'Research',
+		url: 'https://arxiv.org/abs/123',
+		arxiv: 'arxiv.org/abs/123',
+		overleaf: 'overleaf.com/project/456',
+		repeated: 'https://overleaf.com/project/456',
+		notes: 'Keep this',
+		customFields: [
+			{ id: 'arxiv', label: 'Paper', type: 'link' },
+			{ id: 'overleaf', label: 'Draft', type: 'link' },
+			{ id: 'repeated', label: 'Same draft', type: 'link' },
+			{ id: 'notes', label: 'Notes', type: 'textarea' }
+		]
+	};
+	const before = structuredClone(original);
+	const { nodeData } = normalizeLinkNode('link', original);
+	assert.equal(nodeData.linkSchemaVersion, LINK_NODE_SCHEMA_VERSION);
+	assert.deepEqual(
+		nodeData.customFields.map((field) => field.id),
+		['overleaf', 'notes']
+	);
+	assert.equal(nodeData.overleaf, 'https://overleaf.com/project/456');
+	assert.equal(nodeData.arxiv, undefined);
+	assert.equal(nodeData.repeated, undefined);
+	assert.equal(nodeData.notes, 'Keep this');
+	assert.deepEqual(original, before, 'normalization does not mutate the saved snapshot');
+
+	const edited = { ...nodeData, url: 'https://github.com/org/repo' };
+	assert.deepEqual(normalizeLinkNode('link', edited).nodeData, edited);
+	assert.equal(edited.arxiv, undefined, 'the replaced primary URL cannot reappear');
+	const removed = {
+		...edited,
+		customFields: edited.customFields.filter((field) => field.id !== 'overleaf')
+	};
+	delete removed.overleaf;
+	assert.deepEqual(
+		normalizeLinkNode('link', removed).nodeData,
+		removed,
+		'deleted extras stay deleted'
+	);
+});
+
+test('promoted custom URLs and legacy extras retain their visibility and other metadata', () => {
+	const { nodeData } = normalizeLinkNode('link', {
+		title: 'My links',
+		first: 'https://example.org/paper.pdf',
+		second: 'https://github.com/org/repo',
+		status: 'Done',
+		locked: true,
+		description: 'Keep the description',
+		fieldVisibility: { second: false, description: false },
+		customFields: [
+			{ id: 'first', label: 'Paper', type: 'link', showInDisplay: false },
+			{ id: 'second', label: 'Code', type: 'link' },
+			{ id: 'title', label: 'Name', type: 'text', showInDisplay: false }
+		]
+	});
+	assert.equal(nodeData.url, 'https://example.org/paper.pdf');
+	assert.equal(nodeData.first, undefined);
+	assert.deepEqual(nodeData.fieldVisibility, { url: false, title: false, description: false });
+	assert.deepEqual(nodeData.customFields, [
+		{ id: 'second', label: 'Code', type: 'link', showInDisplay: false }
+	]);
+	assert.equal(nodeData.title, 'My links');
+	assert.equal(nodeData.description, 'Keep the description');
+	assert.equal(nodeData.status, 'Done');
+	assert.equal(nodeData.locked, true);
+});
+
+test('duplicate URLs remain visible if any of their old fields were visible', () => {
+	const { nodeData } = normalizeLinkNode('paper', {
+		arxiv: 'arxiv.org/abs/123',
+		other: 'https://arxiv.org/abs/123',
+		fieldVisibility: { arxiv: false },
+		customFields: [{ id: 'other', label: 'Paper', type: 'link', showInDisplay: true }]
+	});
+	assert.equal(nodeData.fieldVisibility.url, true);
+	assert.deepEqual(nodeData.customFields, []);
+});
+
+test('previously converted nodes retain the hidden state of their primary legacy field', () => {
+	const { nodeData } = normalizeLinkNode('link', {
+		url: 'https://arxiv.org/abs/123',
+		arxiv: 'https://arxiv.org/abs/123',
+		fieldVisibility: { arxiv: false }
+	});
+	assert.equal(nodeData.fieldVisibility.url, false);
+	assert.deepEqual(nodeData.customFields, []);
+});
+
+test('invalid and empty legacy URLs remain editable, while cleared primary URLs stay cleared', () => {
+	const { nodeData } = normalizeLinkNode('link', {
+		url: '',
+		github: 'https://github.com/org/repo',
+		invalid: 'not a URL',
+		empty: '',
+		customFields: [
+			{ id: 'invalid', label: 'Fix this', type: 'link' },
+			{ id: 'empty', label: 'Draft', type: 'link' }
+		]
+	});
+	assert.equal(nodeData.url, '');
+	assert.equal(nodeData.invalid, 'not a URL');
+	assert.equal(nodeData.empty, '');
+	assert.equal(nodeData.customFields.length, 3);
+	assert.deepEqual(normalizeLinkNode('link', nodeData).nodeData, nodeData);
+});
+
+test('migration runs once so later user edits are not reinterpreted on reload', () => {
+	const data = {
+		url: 'https://example.com',
+		linkSchemaVersion: LINK_NODE_SCHEMA_VERSION,
+		extra: 'https://example.com',
+		customFields: [{ id: 'extra', label: 'Link', type: 'link', showInDisplay: false }]
+	};
+	assert.equal(normalizeLinkNode('link', data).nodeData, data);
+	assert.equal(normalizeLinkNode('link', { ...data, url: '' }).nodeData.extra, data.extra);
+});
+
+test('content saves persist the upgraded type, including inline edits without a template type', () => {
+	const upgraded = normalizeLinkNode('paper', {
+		arxiv: 'https://arxiv.org/abs/123',
+		overleaf: 'https://overleaf.com/project/456',
+		status: 'Done'
+	}).nodeData;
+	const update = buildNodeUpdate({ nodeData: { ...upgraded, title: 'Edited title' } });
+	assert.equal(update.templateType, 'link');
+	assert.equal(update.nodeData.title, 'Edited title');
+	assert.equal(update.nodeData.arxiv, undefined);
+	assert.equal(update.nodeData.overleaf, upgraded.overleaf);
+	assert.equal(update.status, 'Done');
+	const legacySave = buildNodeUpdate({
+		data: { templateType: 'code', nodeData: { github: 'github.com/org/repo' } }
+	});
+	assert.equal(legacySave.templateType, 'link');
+	assert.equal(legacySave.nodeData.url, 'https://github.com/org/repo');
+	assert.equal(legacySave.nodeData.linkSchemaVersion, LINK_NODE_SCHEMA_VERSION);
+});
+
+test('secondary links respect visibility and suppress empty, unsafe, and duplicate primary URLs', () => {
+	const data = {
+		url: 'https://github.com/org/repo',
+		github: 'github.com/org/repo',
+		paper: 'arxiv.org/abs/1234',
+		hidden: 'https://example.com/private',
+		empty: '',
+		unsafe: 'javascript:alert(1)',
+		notes: 'Keep these notes',
+		customFields: [
+			{ id: 'github', type: 'link', label: 'Repository' },
+			{ id: 'paper', type: 'link', label: 'Paper' },
+			{ id: 'hidden', type: 'link', label: 'Hidden', showInDisplay: false },
+			{ id: 'empty', type: 'link', label: 'Empty' },
+			{ id: 'unsafe', type: 'link', label: 'Unsafe' },
+			{ id: 'notes', type: 'text', label: 'Notes' }
+		]
+	};
+	assert.deepEqual(
+		getVisibleSecondaryLinks(data).map((field) => field.id),
+		['paper']
+	);
+	assert.deepEqual(
+		getVisibleSecondaryLinks({ ...data, fieldVisibility: { url: false } }).map((field) => field.id),
+		['github', 'paper']
+	);
+	assert.equal(data.customFields.length, 6, 'all fields remain available for editing');
+});
+
 test('creation exposes one Link template and creates canonical nodes with a default view', async () => {
 	for (const type of ['paper', 'code', 'iframe']) {
 		assert.equal(nodeTemplates[type], undefined);
@@ -147,5 +319,6 @@ test('creation exposes one Link template and creates canonical nodes with a defa
 		const result = await service.addNode(type, { x: 1, y: 2 });
 		assert.equal(result.type, 'link');
 		assert.equal(result.fields.viewMode, 'Node');
+		assert.equal(result.fields.linkSchemaVersion, LINK_NODE_SCHEMA_VERSION);
 	}
 });

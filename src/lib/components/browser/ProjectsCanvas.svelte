@@ -1,9 +1,34 @@
 <script lang="ts">
 	import NodeCreationMenu from '$lib/components/NodeCreationMenu.svelte';
+	import NodeStatusMenu from '$lib/components/NodeStatusMenu.svelte';
+	import {
+		isFinitePosition,
+		readCanvasViewport,
+		MIN_CANVAS_ZOOM,
+		MAX_CANVAS_ZOOM
+	} from '$lib/utils/canvasGeometry';
 	let creationMenu = $state<{ x: number; y: number } | null>(null);
+	let statusMenu = $state<{ x: number; y: number; projectId: string } | null>(null);
 	function openCreationMenu({ event }: { event: MouseEvent }) {
 		event.preventDefault();
+		statusMenu = null;
 		creationMenu = { x: event.clientX, y: event.clientY };
+	}
+	function openStatusMenu({ node, event }: { node: Node; event: MouseEvent }) {
+		if (node.type !== 'projectCanvas') return;
+		event.preventDefault();
+		event.stopPropagation();
+		const data = node.data.nodeData as Record<string, unknown>;
+		if (typeof data.projectId !== 'string') return;
+		creationMenu = null;
+		statusMenu = { x: event.clientX, y: event.clientY, projectId: data.projectId };
+	}
+	async function setProjectDone(projectId: string, done: boolean) {
+		const result = await editCommand.run(() =>
+			projectsService.updateProject(projectId, { status: done ? 'Done' : 'active' })
+		);
+		if (!result.ok) throw new Error($editCommand.error || 'Could not update project status.');
+		await onProjectUpdate?.();
 	}
 	async function createCanvasNode(type: string, position: { x: number; y: number }) {
 		if (!nodesService) return { ok: false } as const;
@@ -80,9 +105,12 @@
 		projects: Project[];
 		onProjectClick: (slug: string) => void;
 		onCreateProject?: () => void;
-		onProjectUpdate?: () => void;
+		onProjectUpdate?: () => void | Promise<void>;
 		viewMode?: 'list' | 'canvas';
 	}>();
+	let statusProject = $derived(
+		projects.find((project: Project) => project.id === statusMenu?.projectId)
+	);
 
 	const nodeTypes = {
 		universal: UniversalNode,
@@ -134,13 +162,10 @@
 	let showMinimap = $state(true);
 
 	// Edit panel state
-	let showEditPanel = $state(false);
+	let sidebarView = $state<'inspector' | 'stickers' | null>(null);
 	let editNodeId = $state('');
 	let editNodeData = $state({});
 	let editTemplateType = $state('');
-
-	// Sticker panel state
-	let showStickerPanel = $state(false);
 
 	// Selection state
 	let selectedNodes = $state<Node[]>([]);
@@ -211,7 +236,7 @@
 
 		const nodeId = matchingNodeIds[currentMatchIndex];
 		const node = workingNodes.find((n) => n.id === nodeId);
-		if (node && node.position) {
+		if (node && isFinitePosition(node.position) && setViewport) {
 			setViewport(
 				{ x: -node.position.x + 400, y: -node.position.y + 300, zoom: 1 },
 				{ duration: 300 }
@@ -309,7 +334,7 @@
 
 				// Load viewport position after helpers are initialized
 				setTimeout(() => {
-					loadViewportPosition();
+					if (mounted) void loadViewportPosition();
 				}, 100);
 			} catch (error) {
 				console.error('Failed to initialize SvelteFlow helpers:', error);
@@ -427,8 +452,7 @@
 		editNodeId = nodeId;
 		editNodeData = nodeData;
 		editTemplateType = templateType;
-		showEditPanel = true;
-		showStickerPanel = false;
+		sidebarView = 'inspector';
 	};
 
 	const handleNodeDelete = async (payload: CanvasPayloads['nodeDelete']) => {
@@ -471,7 +495,8 @@
 		nodeUpdate: handleNodeUpdate,
 		addSticker: handleAddStickerEvent,
 		nodeTasksOpen: () => {},
-		addTask: () => {}
+		addTask: () => {},
+		editTask: () => {}
 	});
 
 	async function handleEditPanelSave(nodeId: string, data: any) {
@@ -483,7 +508,7 @@
 	async function handleEditPanelDelete(nodeId: string) {
 		if (nodeId.startsWith('project-')) return;
 		const result = await editCommand.run(() => nodesService.deleteNode(nodeId));
-		if (result.ok) showEditPanel = false;
+		if (result.ok && sidebarView === 'inspector') sidebarView = null;
 	}
 
 	// ── Canvas drag-and-drop ─────────────────────────────────────────────────
@@ -575,11 +600,7 @@
 	}
 
 	function handleShowStickers() {
-		showStickerPanel = true;
-	}
-
-	function handleCloseStickerPanel() {
-		showStickerPanel = false;
+		sidebarView = 'stickers';
 	}
 
 	async function handleAddSticker(payload: CanvasPayloads['addSticker']) {
@@ -634,12 +655,8 @@
 		}
 
 		try {
-			const viewport = getViewport();
-			const viewportData = {
-				x: viewport.x,
-				y: viewport.y,
-				zoom: viewport.zoom
-			};
+			const viewportData = readCanvasViewport(getViewport());
+			if (!viewportData) return;
 
 			console.log(
 				'ProjectsCanvas: Attempting to save viewport position for user:',
@@ -652,7 +669,7 @@
 			console.log('ProjectsCanvas: Existing project data:', project);
 
 			// Get existing viewport positions object, or create new one
-			const existingViewportPositions = (project as any)?.viewportPositions || {};
+			const existingViewportPositions = project?.viewportPositions || {};
 
 			// Update viewport position for current user
 			const updatedViewportPositions = {
@@ -663,7 +680,7 @@
 			// Save viewport positions
 			const result = await projectsService.updateProject('project-canvas', {
 				viewportPositions: updatedViewportPositions
-			} as any);
+			});
 			console.log('ProjectsCanvas: Update result:', result);
 			console.log(
 				'ProjectsCanvas: Saved viewport position for user:',
@@ -692,12 +709,15 @@
 			console.log('ProjectsCanvas: Loaded project data:', project);
 
 			// Check for user-specific viewport position
-			const userViewportPosition = (project as any)?.viewportPositions?.[currentUser.uid];
+			const userViewportPosition = readCanvasViewport(
+				project?.viewportPositions?.[currentUser.uid]
+			);
 
 			if (userViewportPosition) {
 				const { x, y, zoom } = userViewportPosition;
 				// Use setTimeout to ensure SvelteFlow is fully mounted
 				setTimeout(() => {
+					if (!mounted) return;
 					setViewport({ x, y, zoom }, { duration: 0 });
 					console.log(
 						'ProjectsCanvas: Restored viewport position for user:',
@@ -877,6 +897,7 @@
 
 				<SvelteFlow
 					onpanecontextmenu={openCreationMenu}
+					onnodecontextmenu={openStatusMenu}
 					class="h-full w-full bg-black"
 					bind:nodes={workingNodes}
 					bind:edges={canvasEdges}
@@ -893,7 +914,8 @@
 					nodesDraggable={true}
 					nodesConnectable={true}
 					elevateNodesOnSelect={true}
-					minZoom={0.3}
+					minZoom={MIN_CANVAS_ZOOM}
+					maxZoom={MAX_CANVAS_ZOOM}
 					deleteKey={['Delete', 'Backspace']}
 					panOnDrag={false}
 					panOnScroll={true}
@@ -909,6 +931,17 @@
 								view="projects"
 								onCreate={createFromMenu}
 								onClose={() => (creationMenu = null)}
+							/>
+						{/key}
+					{/if}
+					{#if statusMenu && statusProject}
+						{#key statusMenu}
+							{@const projectId = statusMenu.projectId}
+							<NodeStatusMenu
+								position={statusMenu}
+								done={statusProject.status === 'Done'}
+								onChange={(done) => setProjectDone(projectId, done)}
+								onClose={() => (statusMenu = null)}
 							/>
 						{/key}
 					{/if}
@@ -929,33 +962,35 @@
 			</div>
 		</div>
 
-		<!-- Edit Sidebar -->
-		{#if showEditPanel}
+		<!-- One sidebar hosts either the inspector or sticker picker. -->
+		{#if sidebarView}
 			<aside
-				aria-label="Node inspector"
+				aria-label="Canvas sidebar"
 				class="flex h-full min-h-0 w-80 max-w-[85vw] shrink-0 flex-col overflow-hidden border-l border-zinc-200 bg-white"
 			>
 				<div class="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200 px-4">
-					<span class="font-sans text-xs font-semibold text-zinc-900">Node properties</span><button
-						onclick={() => (showEditPanel = false)}
-						aria-label="Close inspector"
+					<span class="font-sans text-xs font-semibold text-zinc-900"
+						>{sidebarView === 'stickers' ? 'Stickers' : 'Node properties'}</span
+					>
+					<button
+						onclick={() => (sidebarView = null)}
+						aria-label="Close sidebar"
 						class="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100">Close</button
 					>
 				</div>
-				<EditPanel
-					error={$editCommand.error}
-					nodeId={editNodeId}
-					nodeData={editNodeData}
-					templateType={editTemplateType}
-					onSave={handleEditPanelSave}
-					onDelete={handleEditPanelDelete}
-				/>
+				{#if sidebarView === 'stickers'}
+					<StickerPanel onClose={() => (sidebarView = null)} />
+				{:else}
+					<EditPanel
+						error={$editCommand.error}
+						nodeId={editNodeId}
+						nodeData={editNodeData}
+						templateType={editTemplateType}
+						onSave={handleEditPanelSave}
+						onDelete={handleEditPanelDelete}
+					/>
+				{/if}
 			</aside>
-		{/if}
-
-		<!-- Sticker Panel -->
-		{#if showStickerPanel}
-			<StickerPanel bind:isOpen={showStickerPanel} onClose={handleCloseStickerPanel} />
 		{/if}
 	</div>
 </SvelteFlowProvider>

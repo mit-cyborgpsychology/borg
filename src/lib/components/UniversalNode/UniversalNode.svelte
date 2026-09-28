@@ -48,7 +48,7 @@
 	// per node (previously: one Firestore subscription per rendered node).
 	const projectStore = getProjectStoreContext();
 	let tasks = $derived(projectStore.tasksByNode.get(id) ?? []);
-	let hasTasks = $derived(tasks.length > 0);
+	let showTasks = $derived(!!projectStore.projectSlug);
 
 	// Determine border color based on status
 	let borderColor = $derived.by(() => {
@@ -97,8 +97,7 @@
 		// Dispatch event to open task sidebar at Canvas level
 		canvasActions.nodeTasksOpen({
 			nodeId: id,
-			nodeTitle: template.id === 'link' ? getLinkTitle(nodeData) : nodeData.title || 'Untitled',
-			tasks: tasks
+			nodeTitle: template.id === 'link' ? getLinkTitle(nodeData) : nodeData.title || 'Untitled'
 		});
 	}
 </script>
@@ -139,7 +138,7 @@
 			class="group relative cursor-pointer border transition-all duration-200 {template.id ===
 			'note'
 				? `aspect-square ${nodeSizeClass} rounded-lg p-1`
-				: 'max-w-64 min-w-48'} {hasTasks ? 'rounded-t-lg' : 'rounded-lg'}"
+				: 'max-w-64 min-w-48'} {showTasks ? 'rounded-t-lg' : 'rounded-lg'}"
 			style="box-shadow: {template.id === 'note'
 				? '0;'
 				: '0;'}; border-color: {borderColor}; background-color: {template.id === 'note' &&
@@ -180,12 +179,13 @@
 		</div>
 
 		<!-- Tasks Management (outside/below the main node) -->
-		{#if template.id !== 'note'}
+		{#if projectStore.projectSlug}
 			<NodeTasks
 				{tasks}
+				nodeId={id}
+				projectSlug={projectStore.projectSlug}
 				{borderColor}
 				onTaskClick={handleTaskPillClick}
-				onAddTaskClick={handleTaskPillClick}
 			/>
 		{/if}
 	</div>

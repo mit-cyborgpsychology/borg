@@ -7,10 +7,10 @@
 	}>();
 </script>
 
-<div class="sticker-grid-container h-full flex flex-col min-h-0">
+<div class="sticker-grid-container flex h-full min-h-0 flex-col">
 	<!-- Stickers grid with scroll -->
-	<div class="flex-1 overflow-y-auto p-4 min-h-0">
-		<div class="grid grid-cols-4 gap-3">
+	<div class="min-h-0 flex-1 overflow-y-auto p-3">
+		<div class="grid grid-cols-4 gap-2">
 			{#each category.stickers as sticker (sticker.filename)}
 				<StickerItem {sticker} category={category.name} />
 			{/each}
@@ -18,7 +18,7 @@
 
 		<!-- Empty state -->
 		{#if category.stickers.length === 0}
-			<div class="flex items-center justify-center h-32 text-zinc-500">
+			<div class="flex h-32 items-center justify-center text-zinc-500">
 				<span>No stickers in this category</span>
 			</div>
 		{/if}

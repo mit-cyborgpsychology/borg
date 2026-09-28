@@ -4,6 +4,7 @@
 	import { Lock, Unlock, Trash2 } from '@lucide/svelte';
 	import { getCanvasActions } from '$lib/features/canvas/context';
 	import { describeLink, getLinkTitle } from '$lib/features/links/linkNode';
+	import SecondaryLinks from './components/SecondaryLinks.svelte';
 
 	let { data, id } = $props<{ data: any; id: string; isBeingEdited?: boolean }>();
 	const actions = getCanvasActions();
@@ -139,6 +140,7 @@
 			>
 		</div>
 	</div>
+	<SecondaryLinks {nodeData} embedded />
 	<Handle type="target" position={Position.Left} class="!h-2 !w-2 !bg-zinc-600" />
 	<Handle type="source" position={Position.Right} class="!h-2 !w-2 !bg-zinc-600" />
 </div>

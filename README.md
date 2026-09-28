@@ -55,6 +55,37 @@ VITE_FIREBASE_PROJECT_ID=demo-borg pnpm dev
 
 When using Firebase emulators, the fake Google Sign-In dialog will let you create fake accounts and sign in with any email address. Use an email starting with "admin" (e.g., `admin@example.com`) to automatically get admin permissions.
 
+### References library
+
+The References tab displays a central UMAP map with a paper sidebar. Dots are colored
+by embedding-based K-means topics, with cached LLM labels. Click a topic label
+or choose a topic in the sidebar to filter papers without moving the dots. The map uses
+coordinates precomputed by Python after each saved paper via an ingestion hook;
+there is no polling. New papers join the nearest saved topic. K-means and topic
+labels refresh only at total paper counts divisible by 10 (40, 50, 60, ...). Browser visits and filters never fit UMAP.
+Configure private `RESEARCH_MAP_URL` and `RESEARCH_MAP_TOKEN` alongside Grist; see
+[worker setup](deploy/research-map/README.md). The sidebar works if the map is unavailable.
+
+The References tab reads the lab's shared papers from Grist, with text search,
+source filters, saved-date/title sorting, summaries, and paper/PDF links.
+Set `GRIST_API_URL` (including `/api`), `GRIST_API_KEY`,
+`GRIST_RESEARCH_DOC_ID`, and optionally `GRIST_RESEARCH_TABLE_ID` (`Table1` by
+default) in the server environment. For deployment, configure these in the
+Cloudflare environment as well; the API key must remain a secret without a
+`VITE_` prefix. The browser receives paper fields only.
+
+`GET /api/research` requires a Firebase ID token and checks the caller's
+`users/{uid}.isApproved` record before reading Grist. Vite development with a
+`demo-*` project validates emulator accounts on port 9099 and checks approval
+through the Firestore emulator on port 8080. Production always verifies signed
+Firebase tokens. The tab displays saved dates, not publication dates.
+
+With a local emulator-backed dev server and the research settings configured,
+run `BORG_TEST_URL=http://127.0.0.1:5181 node tests/browser/research.mjs`.
+This checks the live research library and access controls, then simulates error
+and empty states in the browser. It creates test users only in `demo-borg` and
+does not write to Grist.
+
 ### Building
 
 ```bash
