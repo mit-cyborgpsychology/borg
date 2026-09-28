@@ -225,7 +225,7 @@
 
 <div class="group relative">
 	<div
-		class="outline-node relative rounded-lg border bg-white transition-all duration-200"
+		class="outline-node relative rounded-lg border bg-white"
 		class:p-3={!embeddedDoc}
 		style:width={embeddedDoc ? `${width}px` : '220px'}
 		style="border-color: #3b82f6;"
