@@ -79,7 +79,7 @@ try {
 	});
 	for (const [nodeId, x] of [
 		['a', 100],
-		['b', 420]
+		['b', 900]
 	])
 		await put('projects/' + id + '/nodes/' + nodeId, {
 			templateType: 'outline',
@@ -126,22 +126,29 @@ try {
 	assert.equal(collection.permission, 'read_write');
 	assert.equal(collection.sharing, false);
 
-	const dialog = page.getByRole('dialog', { name: 'Outline document editor' });
+	const dialog = a.getByRole('dialog', { name: 'Wiki document editor' });
 	await dialog.waitFor();
 	await dialog
 		.frameLocator('iframe')
 		.getByRole('heading', { name: 'Outline editor fixture' })
 		.waitFor();
+	const text = dialog.frameLocator('iframe').getByRole('textbox', { name: 'Document text' });
+	await text.fill('Keep this draft while expanding');
+	assert.equal(await dialog.evaluate((el) => el.matches(':modal')), false);
+	await a.getByRole('button', { name: 'Expand note' }).click();
+	await page.waitForFunction(() => document.querySelector('dialog:modal'));
+	assert.equal(await text.inputValue(), 'Keep this draft while expanding');
 	await page.screenshot({ path: '/tmp/borg-outline-editor.png' });
 	await dialog.getByRole('button', { name: 'Close document editor' }).click();
+	await page.waitForFunction(() => !document.querySelector('dialog:modal'));
+	assert.equal(await text.inputValue(), 'Keep this draft while expanding');
 	const b = page.locator('.svelte-flow__node[data-id="b"]');
 	await b.getByRole('button', { name: 'Link existing note' }).click();
 	await b.getByRole('button', { name: document.title, exact: true }).click();
-	await dialog.waitFor();
-	await dialog.getByRole('button', { name: 'Close document editor' }).click();
+	await b.locator('iframe').waitFor();
 	await page.reload();
-	await a.getByRole('button', { name: 'Open note', exact: true }).waitFor();
-	await b.getByRole('button', { name: 'Open note', exact: true }).waitFor();
+	await a.locator('iframe').waitFor();
+	await b.locator('iframe').waitFor();
 	assert.deepEqual(errors, []);
 	console.log(
 		'Outline browser passed: lazy collection, live document creation, iframe panel, existing-document link, reload persistence, auth.'

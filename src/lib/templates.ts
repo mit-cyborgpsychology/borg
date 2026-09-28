@@ -248,7 +248,7 @@ export const nodeTemplates: Record<string, NodeTemplate> = {
 
 	outline: {
 		id: 'outline',
-		name: 'Outline Doc',
+		name: 'Wiki',
 		color: '#3b82f6',
 		fields: [
 			{
@@ -260,17 +260,17 @@ export const nodeTemplates: Record<string, NodeTemplate> = {
 			},
 			{
 				id: 'outlineDocId',
-				label: 'Outline Doc ID',
+				label: 'Wiki Document ID',
 				type: 'text',
-				placeholder: 'Outline document ID...',
+				placeholder: 'Wiki document ID...',
 				required: false,
 				showInDisplay: false
 			},
 			{
 				id: 'outlineUrl',
-				label: 'Outline URL',
+				label: 'Wiki URL',
 				type: 'text',
-				placeholder: 'Outline document URL...',
+				placeholder: 'Wiki document URL...',
 				required: false,
 				showInDisplay: false
 			}
