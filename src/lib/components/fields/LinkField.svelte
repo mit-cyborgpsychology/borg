@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { HardDrive, Link, Archive, Globe } from '@lucide/svelte';
+	import { describeLink } from '$lib/features/links/linkNode';
+	import LinkIcon from './LinkIcon.svelte';
 	import type { TemplateField } from '../../templates';
 
 	let {
@@ -13,95 +14,39 @@
 		readonly?: boolean;
 		mode?: 'display' | 'edit';
 	}>();
-
-	// Function to get the appropriate icon for a field
-	function getFieldIcon(fieldLabel: string, url: string = ''): {
-		type: 'svg' | 'lucide';
-		path?: string;
-		component?: any;
-	} {
-		const label = fieldLabel.toLowerCase();
-		const urlLower = url.toLowerCase();
-
-		// First check URL for Google services
-		if (url) {
-			if (urlLower.includes('docs.google.com/document') || urlLower.includes('docs.google.com')) {
-				return { type: 'svg', path: '/docs.svg' };
-			}
-			if (urlLower.includes('docs.google.com/spreadsheets') || urlLower.includes('sheets.google.com')) {
-				return { type: 'svg', path: '/sheets.svg' };
-			}
-			if (urlLower.includes('docs.google.com/presentation') || urlLower.includes('slides.google.com')) {
-				return { type: 'svg', path: '/slides.svg' };
-			}
-			if (urlLower.includes('drive.google.com')) {
-				return { type: 'svg', path: '/googledrive.svg' };
-			}
-		}
-
-		// Check for static SVG logos from field label
-		if (label.includes('github')) {
-			return { type: 'svg', path: '/github.svg' };
-		}
-		if (label.includes('google drive') || label.includes('drive')) {
-			return { type: 'svg', path: '/googledrive.svg' };
-		}
-		if (label.includes('overleaf')) {
-			return { type: 'svg', path: '/overleaf.svg' };
-		}
-
-		// Fall back to Lucide icons
-		if (label.includes('arxiv') || label.includes('archive')) {
-			return { type: 'lucide', component: Archive };
-		}
-		if (label.includes('publisher') || label.includes('website')) {
-			return { type: 'lucide', component: Globe };
-		}
-		if (label.includes('dropbox') || label.includes('storage')) {
-			return { type: 'lucide', component: HardDrive };
-		}
-
-		// Default to Link icon
-		return { type: 'lucide', component: Link };
-	}
+	let link = $derived(describeLink(value));
+	let label = $derived(link.providerId ? link.providerName : field.label);
 </script>
 
 <div class="field-container">
 	{#if mode === 'display'}
-		{#if value}
-			{@const icon = getFieldIcon(field.label, value)}
+		{#if link.url}
 			<button
-				onclick={(e) => { e.stopPropagation(); window.open(value, '_blank'); }}
-				class="flex w-full items-center justify-center gap-1 rounded-lg bg-borg-brown/80 p-2 text-xs font-medium transition-colors hover:bg-borg-brown/60 focus:ring-2 focus:ring-borg-blue focus:ring-offset-2 focus:ring-offset-zinc-900 focus:outline-none"
+				onclick={(event) => {
+					event.stopPropagation();
+					window.open(link.url, '_blank', 'noopener,noreferrer');
+				}}
+				class="nodrag flex w-full items-center justify-center gap-1 rounded-lg bg-borg-brown/80 p-2 text-xs font-medium transition-colors hover:bg-borg-brown/60 focus:ring-2 focus:ring-borg-blue focus:ring-offset-2 focus:outline-none"
 			>
-				{#if icon.type === 'svg'}
-					<img src={icon.path} alt="" class="mr-1 h-4 w-4" />
-				{:else if icon.component}
-					{@const IconComponent = icon.component}
-					<IconComponent class="mr-1 h-4 w-4" />
-				{/if}
-				Open {field.label}
+				<LinkIcon url={link.url} />
+				Open {label}
 			</button>
 		{:else}
-			<div class="py-1 text-zinc-600">No link set</div>
+			<div class="py-1 text-zinc-600">{value ? 'Invalid web address' : 'No link set'}</div>
 		{/if}
 	{:else if readonly}
-		{#if value}
+		{#if link.url}
 			<a
-				href={value}
+				href={link.url}
 				target="_blank"
 				rel="noopener noreferrer"
-				class="text-blue-400 underline hover:text-blue-300"
+				class="text-blue-400 underline hover:text-blue-300">{value}</a
 			>
-				{value}
-			</a>
 		{:else}
 			<div class="py-1 text-black">-</div>
 		{/if}
 	{:else}
-		<label class="mb-1 block text-sm font-medium text-zinc-600" for={field.id}>
-			{field.label}
-		</label>
+		<label class="mb-1 block text-sm font-medium text-zinc-600" for={field.id}>{field.label}</label>
 		<input
 			id={field.id}
 			type="url"

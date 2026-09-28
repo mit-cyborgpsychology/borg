@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getCanvasActions } from '$lib/features/canvas/context';
+	import { getLinkTitle } from '$lib/features/links/linkNode';
 	const canvasActions = getCanvasActions();
 	import { Handle, Position } from '@xyflow/svelte';
 	import { getTemplate, type NodeTemplate } from '../../templates';
@@ -96,7 +97,7 @@
 		// Dispatch event to open task sidebar at Canvas level
 		canvasActions.nodeTasksOpen({
 			nodeId: id,
-			nodeTitle: nodeData.title || 'Untitled',
+			nodeTitle: template.id === 'link' ? getLinkTitle(nodeData) : nodeData.title || 'Untitled',
 			tasks: tasks
 		});
 	}

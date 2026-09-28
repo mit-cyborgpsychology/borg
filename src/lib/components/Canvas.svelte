@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getTemplate } from '$lib/templates';
+	import { getLinkTitle } from '$lib/features/links/linkNode';
 	import { projectToolbarItems } from './nodeCreationItems';
 	import { Square } from '@lucide/svelte';
 	import NodeCreationMenu from '$lib/components/NodeCreationMenu.svelte';
@@ -8,9 +9,21 @@
 		event.preventDefault();
 		creationMenu = { x: event.clientX, y: event.clientY };
 	}
+	async function createCanvasNode(type: string, position: { x: number; y: number }) {
+		if (!nodesService) return { ok: false } as const;
+		const result = await editCommand.run(() => nodesService.addNode(type, position));
+		if (result.ok && result.value.data.templateType === 'link') {
+			handleNodeEditEvent({
+				nodeId: result.value.id,
+				nodeData: result.value.data.nodeData as Record<string, unknown>,
+				templateType: 'link'
+			});
+		}
+		return result;
+	}
 	async function createFromMenu(type: string, position: { x: number; y: number }) {
 		if (!nodesService) return false;
-		const result = await editCommand.run(() => nodesService.addNode(type, position));
+		const result = await createCanvasNode(type, position);
 		if (!result.ok)
 			throw new Error($editCommand.error || 'Could not create node. Please try again.');
 		return true;
@@ -21,6 +34,7 @@
 	onDestroy(() => editCommand.dispose());
 	import { provideCanvasActions, type CanvasPayloads } from '$lib/features/canvas/context';
 	import AsyncStatus from './AsyncStatus.svelte';
+	import StatusOverlay from './StatusOverlay.svelte';
 	import { getAppServices } from '$lib/app/context';
 	import { onMount } from 'svelte';
 	import { connectCanvas } from '../features/canvas/connectCanvas';
@@ -388,6 +402,8 @@
 		void editCommand.run(() => nodesService.updateNode(payload.nodeId, payload.data));
 	};
 	const handleNodeEditEvent = (payload: CanvasPayloads['nodeEdit']) => {
+		showRightSidebar = true;
+		sidebarTab = 'nodes';
 		editNodeId = payload.nodeId;
 		// Get the latest node data from the nodes array instead of the event
 		// This ensures we have the most up-to-date data, including any recent image uploads
@@ -533,7 +549,7 @@
 		// Prevent duplicate node creation if modal is already closing
 		if (!showCreateModal || !nodesService) return;
 
-		const result = await editCommand.run(() => nodesService.addNode(templateType, createPosition));
+		const result = await createCanvasNode(templateType, createPosition);
 		if (result.ok) showCreateModal = false;
 	}
 
@@ -542,7 +558,7 @@
 
 		// Get the center of the viewport for toolbar-created nodes
 		const centerPosition = getViewportCenterPosition();
-		void editCommand.run(() => nodesService.addNode(templateType, centerPosition));
+		void createCanvasNode(templateType, centerPosition);
 	}
 
 	// ── Canvas image drag-and-drop ───────────────────────────────────────────
@@ -1005,6 +1021,7 @@
 	function getNodeLabel(node: Node): string {
 		const nd = node.data?.nodeData as Record<string, unknown> | undefined;
 		const type = node.data?.templateType as string | undefined;
+		if (type === 'link') return getLinkTitle(nd ?? {});
 		return (
 			(nd?.title as string) ||
 			(nd?.name as string) ||
@@ -1064,11 +1081,13 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="relative flex-1" onclick={handleCanvasClick}>
-		<AsyncStatus
-			state={{ status: projectStore.status, error: projectStore.error }}
-			onRetry={() => projectStore.retry()}
-		/>
-		<AsyncStatus state={$editCommand} pendingLabel="Saving…" />
+		<StatusOverlay>
+			<AsyncStatus
+				state={{ status: projectStore.status, error: projectStore.error }}
+				onRetry={() => projectStore.retry()}
+			/>
+			<AsyncStatus state={$editCommand} pendingLabel="Saving…" />
+		</StatusOverlay>
 		{#if canvasError || saveError}
 			<div
 				role="alert"
@@ -1215,218 +1234,215 @@
 	</div>
 
 	<!-- Right Sidebar -->
-	{#if showRightSidebar}
-		<div
-			role="complementary"
-			aria-label="Project sidebar"
-			class="flex h-full min-h-0 w-80 max-w-[85vw] flex-shrink-0 flex-col overflow-hidden border-l border-zinc-200 bg-white"
+	<div class="relative h-full shrink-0 {showRightSidebar ? 'w-80 max-w-[85vw]' : 'w-0'}">
+		<button
+			type="button"
+			onclick={() => (showRightSidebar = !showRightSidebar)}
+			aria-label={showRightSidebar ? 'Collapse sidebar' : 'Expand sidebar'}
+			aria-expanded={showRightSidebar}
+			title={showRightSidebar ? 'Collapse sidebar' : 'Expand sidebar'}
+			class="absolute top-1/2 right-full z-50 flex h-10 w-5 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-zinc-200 bg-white text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 focus-visible:outline-2 focus-visible:outline-zinc-400"
 		>
-			<div class="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200 px-4">
-				<span class="font-sans text-xs font-semibold text-zinc-900">Project</span>
-				<button
-					onclick={() => (showRightSidebar = false)}
-					aria-label="Collapse sidebar"
-					title="Collapse sidebar"
-					class="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-					><ChevronRight class="h-4 w-4" /></button
-				>
-			</div>
-			<!-- Top: Tabs + Search -->
-			<div class="flex flex-col gap-3 border-b border-zinc-200 px-3 py-3">
-				<!-- Tabs -->
-				<div class="flex rounded-md bg-zinc-100 p-1 text-xs">
-					<button
-						onclick={() => {
-							sidebarTab = 'nodes';
-							showEditPanel = false;
-						}}
-						class="flex-1 rounded py-1 font-medium transition-colors {sidebarTab === 'nodes'
-							? 'bg-white text-zinc-900 shadow-sm'
-							: 'text-zinc-400 hover:text-zinc-600'}">Nodes</button
-					>
-					<button
-						onclick={() => {
-							sidebarTab = 'tasks';
-							showEditPanel = false;
-						}}
-						class="flex-1 rounded py-1 font-medium transition-colors {sidebarTab === 'tasks'
-							? 'bg-white text-zinc-900 shadow-sm'
-							: 'text-zinc-400 hover:text-zinc-600'}"
-						>Tasks{#if activeTasks.length > 0}
-							({activeTasks.length}){/if}</button
-					>
-				</div>
-				<!-- Search (nodes tab only) -->
-				{#if sidebarTab === 'nodes' && !showEditPanel}
-					<div class="flex items-center gap-1">
-						<input
-							type="text"
-							bind:value={searchQuery}
-							oninput={updateMatchingNodes}
-							onkeydown={(e) => {
-								if (e.key === 'Enter') {
-									if (e.shiftKey) {
-										previousMatch();
-									} else {
-										nextMatch();
-									}
-								}
+			{#if showRightSidebar}<ChevronRight class="h-3 w-3" />{:else}<ChevronLeft
+					class="h-3 w-3"
+				/>{/if}
+		</button>
+		{#if showRightSidebar}
+			<div
+				role="complementary"
+				aria-label="Project sidebar"
+				class="flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-zinc-200 bg-white"
+			>
+				<!-- Top: Tabs + Search -->
+				<div class="flex flex-col gap-3 border-b border-zinc-200 px-3 py-3">
+					<!-- Tabs -->
+					<div class="flex rounded-md bg-zinc-100 p-1 text-xs">
+						<button
+							onclick={() => {
+								sidebarTab = 'nodes';
+								showEditPanel = false;
 							}}
-							placeholder="Search nodes..."
-							class="min-w-0 flex-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs text-black placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-						/>
-						{#if matchingNodeIds.length > 0}
-							<span class="shrink-0 text-xs text-zinc-500"
-								>{currentMatchIndex + 1}/{matchingNodeIds.length}</span
-							>
-							<button
-								onclick={previousMatch}
-								class="rounded p-1 text-zinc-500 hover:bg-zinc-100"
-								title="Previous (Shift+Enter)"
-								aria-label="Previous match"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="12"
-									height="12"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg
+							class="flex-1 rounded py-1 font-medium transition-colors {sidebarTab === 'nodes'
+								? 'bg-white text-zinc-900 shadow-sm'
+								: 'text-zinc-400 hover:text-zinc-600'}">Nodes</button
+						>
+						<button
+							onclick={() => {
+								sidebarTab = 'tasks';
+								showEditPanel = false;
+							}}
+							class="flex-1 rounded py-1 font-medium transition-colors {sidebarTab === 'tasks'
+								? 'bg-white text-zinc-900 shadow-sm'
+								: 'text-zinc-400 hover:text-zinc-600'}"
+							>Tasks{#if activeTasks.length > 0}
+								({activeTasks.length}){/if}</button
+						>
+					</div>
+					<!-- Search (nodes tab only) -->
+					{#if sidebarTab === 'nodes' && !showEditPanel}
+						<div class="flex items-center gap-1">
+							<input
+								type="text"
+								bind:value={searchQuery}
+								oninput={updateMatchingNodes}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') {
+										if (e.shiftKey) {
+											previousMatch();
+										} else {
+											nextMatch();
+										}
+									}
+								}}
+								placeholder="Search nodes..."
+								class="min-w-0 flex-1 rounded border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs text-black placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+							/>
+							{#if matchingNodeIds.length > 0}
+								<span class="shrink-0 text-xs text-zinc-500"
+									>{currentMatchIndex + 1}/{matchingNodeIds.length}</span
 								>
-							</button>
-							<button
-								onclick={nextMatch}
-								class="rounded p-1 text-zinc-500 hover:bg-zinc-100"
-								title="Next (Enter)"
-								aria-label="Next match"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="12"
-									height="12"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg
+								<button
+									onclick={previousMatch}
+									class="rounded p-1 text-zinc-500 hover:bg-zinc-100"
+									title="Previous (Shift+Enter)"
+									aria-label="Previous match"
 								>
-							</button>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="12"
+										height="12"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg
+									>
+								</button>
+								<button
+									onclick={nextMatch}
+									class="rounded p-1 text-zinc-500 hover:bg-zinc-100"
+									title="Next (Enter)"
+									aria-label="Next match"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="12"
+										height="12"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg
+									>
+								</button>
+							{/if}
+						</div>
+					{/if}
+				</div>
+
+				<!-- Content -->
+				{#if sidebarTab === 'tasks'}
+					<!-- Task list -->
+					<div class="min-h-0 flex-1 overflow-y-auto">
+						{#if activeTasks.length === 0}
+							<p class="p-4 text-center text-xs text-zinc-400">No active tasks</p>
+						{:else}
+							<div class="space-y-5 p-4">
+								{#each Object.entries(sidebarTasksByNode) as [nodeId, nodeGroup] (nodeId)}
+									<div>
+										<p class="mb-2 px-1 text-xs font-semibold text-zinc-800">
+											{nodeGroup.nodeTitle}
+										</p>
+										{#each nodeGroup.tasks as task (task.id)}
+											<div
+												class="flex items-start gap-2 rounded px-1 py-1.5 text-xs hover:bg-zinc-50"
+											>
+												<button
+													onclick={async () => {
+														const result = taskService.resolveTask(
+															task.nodeId,
+															task.id,
+															task.projectSlug
+														);
+														await result;
+													}}
+													class="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-zinc-300 hover:border-green-500 hover:bg-green-50"
+													aria-label="Mark task as complete"
+												></button>
+												<span class="text-zinc-700">{task.title}</span>
+											</div>
+										{/each}
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{:else if showEditPanel && editNodeId}
+					<!-- Back to node list -->
+					<button
+						onclick={() => (showEditPanel = false)}
+						class="flex w-full items-center gap-1 border-b border-zinc-100 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="10"
+							height="10"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg
+						>
+						All nodes
+					</button>
+					<!-- Node inspector -->
+					<EditPanel
+						error={$editCommand.error}
+						nodeId={editNodeId}
+						nodeData={editNodeData}
+						templateType={editTemplateType}
+						onSave={handleEditPanelSave}
+						onDelete={handleEditPanelDelete}
+					/>
+				{:else}
+					<!-- Node list -->
+					<div class="min-h-0 flex-1 overflow-y-auto">
+						{#if listedNodes.length === 0}
+							<p class="p-4 text-center text-xs text-zinc-400">No nodes yet</p>
+						{:else}
+							{#each listedNodes as node (node.id)}
+								{@const label = getNodeLabel(node)}
+								{@const NodeIcon =
+									projectToolbarItems.find((item) => item.id === node.data?.templateType)?.icon ??
+									Square}
+								{#if label}
+									<button
+										onclick={() => focusNode(node)}
+										class="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none"
+									>
+										<span
+											class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 text-[10px] font-semibold text-zinc-500"
+											><NodeIcon class="h-3.5 w-3.5" /></span
+										>
+										<span class="min-w-0 flex-1"
+											><span class="block truncate text-xs font-medium text-zinc-800">{label}</span
+											><span class=" mt-0.5 block text-[11px] text-zinc-400"
+												>{getTemplate(node.data?.templateType as string)?.name || 'Node'}</span
+											></span
+										>
+										<ChevronRight class="h-3 w-3 text-zinc-300 opacity-0 group-hover:opacity-100" />
+									</button>
+								{/if}
+							{/each}
 						{/if}
 					</div>
 				{/if}
 			</div>
-
-			<!-- Content -->
-			{#if sidebarTab === 'tasks'}
-				<!-- Task list -->
-				<div class="min-h-0 flex-1 overflow-y-auto">
-					{#if activeTasks.length === 0}
-						<p class="p-4 text-center text-xs text-zinc-400">No active tasks</p>
-					{:else}
-						<div class="space-y-5 p-4">
-							{#each Object.entries(sidebarTasksByNode) as [nodeId, nodeGroup] (nodeId)}
-								<div>
-									<p class="mb-2 px-1 text-xs font-semibold text-zinc-800">{nodeGroup.nodeTitle}</p>
-									{#each nodeGroup.tasks as task (task.id)}
-										<div
-											class="flex items-start gap-2 rounded px-1 py-1.5 text-xs hover:bg-zinc-50"
-										>
-											<button
-												onclick={async () => {
-													const result = taskService.resolveTask(
-														task.nodeId,
-														task.id,
-														task.projectSlug
-													);
-													await result;
-												}}
-												class="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-zinc-300 hover:border-green-500 hover:bg-green-50"
-												aria-label="Mark task as complete"
-											></button>
-											<span class="text-zinc-700">{task.title}</span>
-										</div>
-									{/each}
-								</div>
-							{/each}
-						</div>
-					{/if}
-				</div>
-			{:else if showEditPanel && editNodeId}
-				<!-- Back to node list -->
-				<button
-					onclick={() => (showEditPanel = false)}
-					class="flex w-full items-center gap-1 border-b border-zinc-100 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600"
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="10"
-						height="10"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg
-					>
-					All nodes
-				</button>
-				<!-- Node inspector -->
-				<EditPanel
-					error={$editCommand.error}
-					nodeId={editNodeId}
-					nodeData={editNodeData}
-					templateType={editTemplateType}
-					onSave={handleEditPanelSave}
-					onDelete={handleEditPanelDelete}
-				/>
-			{:else}
-				<!-- Node list -->
-				<div class="min-h-0 flex-1 overflow-y-auto">
-					{#if listedNodes.length === 0}
-						<p class="p-4 text-center text-xs text-zinc-400">No nodes yet</p>
-					{:else}
-						{#each listedNodes as node (node.id)}
-							{@const label = getNodeLabel(node)}
-							{@const NodeIcon =
-								projectToolbarItems.find((item) => item.id === node.data?.templateType)?.icon ??
-								Square}
-							{#if label}
-								<button
-									onclick={() => focusNode(node)}
-									class="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none"
-								>
-									<span
-										class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 text-[10px] font-semibold text-zinc-500"
-										><NodeIcon class="h-3.5 w-3.5" /></span
-									>
-									<span class="min-w-0 flex-1"
-										><span class="block truncate text-xs font-medium text-zinc-800">{label}</span
-										><span class="mt-0.5 block font-mono text-[11px] text-zinc-400"
-											>{getTemplate(node.data?.templateType as string)?.name || 'Node'}</span
-										></span
-									>
-									<ChevronRight class="h-3 w-3 text-zinc-300 opacity-0 group-hover:opacity-100" />
-								</button>
-							{/if}
-						{/each}
-					{/if}
-				</div>
-			{/if}
-		</div>
-	{:else}
-		<!-- Small show-panel button on the right edge when sidebar is hidden -->
-		<button
-			onclick={() => (showRightSidebar = true)}
-			class="absolute top-1/2 right-0 z-50 -translate-y-1/2 rounded-l border border-r-0 border-zinc-200 bg-white px-0.5 py-2 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600"
-			title="Show panel"
-		>
-			<ChevronLeft class="h-3 w-3" />
-		</button>
-	{/if}
+		{/if}
+	</div>
 </div>
 
 {#if showCreateModal}

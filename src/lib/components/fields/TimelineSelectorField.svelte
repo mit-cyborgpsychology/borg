@@ -196,12 +196,12 @@
 					<div class="py-2 text-center">
 						<div class="font-sanss mb-3 text-lg font-semibold text-black">{event.title}</div>
 						{#if countdown.isOverdue}
-							<div class="font-mono text-2xl font-bold text-indigo-600">🏁 ENDED!</div>
+							<div class=" text-2xl font-bold text-indigo-600">🏁 ENDED!</div>
 						{:else if countdown.days < 1}
 							<!-- Less than 1 day: show hours and minutes only -->
 							<div class="flex justify-center gap-4">
 								<div class="flex flex-col items-center">
-									<div class="font-mono text-3xl font-bold text-orange-500">
+									<div class=" text-3xl font-bold text-orange-500">
 										{countdown.hours.toString().padStart(2, '0')}
 									</div>
 									<div class="text-sm font-medium text-zinc-600">
@@ -209,7 +209,7 @@
 									</div>
 								</div>
 								<div class="flex flex-col items-center">
-									<div class="font-mono text-3xl font-bold text-orange-500">
+									<div class=" text-3xl font-bold text-orange-500">
 										{countdown.minutes.toString().padStart(2, '0')}
 									</div>
 									<div class="text-sm font-medium text-zinc-600">
@@ -222,7 +222,7 @@
 							<div class="flex justify-center gap-4">
 								{#if countdown.days > 0}
 									<div class="flex flex-col items-center">
-										<div class="font-mono text-3xl font-bold text-borg-blue">
+										<div class=" text-3xl font-bold text-borg-blue">
 											{countdown.days.toString().padStart(2, '0')}
 										</div>
 										<div class="text-sm font-medium text-zinc-600">
@@ -232,7 +232,7 @@
 								{/if}
 								{#if countdown.days > 0 || countdown.hours > 0}
 									<div class="flex flex-col items-center">
-										<div class="font-mono text-3xl font-bold text-borg-blue">
+										<div class=" text-3xl font-bold text-borg-blue">
 											{countdown.hours.toString().padStart(2, '0')}
 										</div>
 										<div class="text-sm font-medium text-zinc-600">
@@ -241,7 +241,7 @@
 									</div>
 								{/if}
 								<div class="flex flex-col items-center">
-									<div class="font-mono text-3xl font-bold text-borg-blue">
+									<div class=" text-3xl font-bold text-borg-blue">
 										{countdown.minutes.toString().padStart(2, '0')}
 									</div>
 									<div class="text-sm font-medium text-zinc-600">

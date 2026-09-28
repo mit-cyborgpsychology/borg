@@ -7,7 +7,7 @@ const baseURL = process.env.BORG_TEST_URL || 'http://127.0.0.1:5179';
 if (!['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname))
 	throw new Error('Smoke tests require a local server');
 const browser = await chromium.launch({ executablePath, headless: true });
-const page = await browser.newPage();
+const page = await browser.newPage({ locale: 'en-US', timezoneId: 'America/New_York' });
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 await page.route('**/*', (route) => {
@@ -15,13 +15,84 @@ await page.route('**/*', (route) => {
 	return ['localhost', '127.0.0.1'].includes(url.hostname) ? route.continue() : route.abort();
 });
 await page.routeWebSocket(/wss:\/\/.*/, (ws) => ws.close());
-async function checkLinkNode(canvasName) {
+
+async function checkNodeDetails(sidebar, node) {
+	const details = sidebar.getByRole('region', { name: 'Details', exact: true });
+	const addDetail = async (name, value) => {
+		await details.getByRole('button', { name: 'Add detail', exact: true }).click();
+		const form = details.getByRole('form', { name: 'Add detail', exact: true });
+		await form.getByLabel('Detail name').fill(name);
+		await form.getByLabel('Detail value').fill(value);
+		await form.getByRole('button', { name: 'Add', exact: true }).click();
+	};
+	await addDetail('Venue', 'Media Lab');
+	await node.getByText('Media Lab', { exact: true }).waitFor();
+	const venue = details.getByRole('group', { name: 'Venue', exact: true }).getByRole('textbox');
+	await venue.fill('Room 401');
+	await node.getByText('Room 401', { exact: true }).waitFor();
+	await details.getByRole('button', { name: 'Hide Venue on canvas', exact: true }).click();
+	await node.getByText('Room 401', { exact: true }).waitFor({ state: 'hidden' });
+	if ((await venue.inputValue()) !== 'Room 401') throw new Error('hiding a detail lost its value');
+	await details.getByRole('button', { name: 'Show Venue on canvas', exact: true }).click();
+	await node.getByText('Room 401', { exact: true }).waitFor();
+	await venue.fill('');
+	await node.getByText('Venue', { exact: true }).waitFor({ state: 'hidden' });
+	await venue.fill('Room 401');
+	await node.getByText('Room 401', { exact: true }).waitFor();
+	await details.getByRole('button', { name: 'Remove Venue', exact: true }).click();
+	await node.getByText('Room 401', { exact: true }).waitFor({ state: 'hidden' });
+	await details.getByRole('button', { name: 'Undo', exact: true }).click();
+	await node.getByText('Room 401', { exact: true }).waitFor();
+	await addDetail('Reference', 'arxiv.org/abs/1234.5678');
+	await node.getByRole('button', { name: 'Open arXiv', exact: true }).waitFor();
+	const reference = details
+		.getByRole('group', { name: 'Reference', exact: true })
+		.getByRole('textbox');
+	if ((await reference.inputValue()) !== 'https://arxiv.org/abs/1234.5678')
+		throw new Error('detail URL was not normalized');
+	await addDetail('Deadline', '2028-02-29');
+	await details
+		.getByRole('group', { name: 'Deadline', exact: true })
+		.locator('input[type="date"]')
+		.waitFor();
+	await node.getByText('2/29/2028', { exact: true }).waitFor();
+	await addDetail(' venue ', 'Duplicate');
+	await details.getByRole('alert').getByText('That name is already in use.').waitFor();
+	await details.getByLabel('Detail name').press('Escape');
+	await details.getByRole('form').waitFor({ state: 'hidden' });
+	if (
+		(await sidebar.getByRole('button', { name: 'Hide Venue on canvas', exact: true }).count()) !== 1
+	)
+		throw new Error('detail visibility controls are duplicated');
+	if (await sidebar.getByRole('region', { name: 'Custom properties', exact: true }).count())
+		throw new Error('old custom property section remains');
+	console.log(
+		'details: creation, editing, empty values, visibility, removal/undo, URL detection and duplicate validation passed'
+	);
+}
+
+async function checkLinkNode(canvasName, source = 'toolbar') {
 	await page.locator('.svelte-flow__node').first().waitFor();
 	await page.waitForTimeout(1000);
 	const before = await page
 		.locator('.svelte-flow__node')
 		.evaluateAll((nodes) => nodes.map((node) => node.dataset.id));
-	await page.getByRole('button', { name: 'Create Link node', exact: true }).click();
+	if (canvasName === 'project' && source === 'menu') {
+		await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+	}
+	if (source === 'menu') {
+		await page
+			.locator('.svelte-flow__pane')
+			.first()
+			.evaluate((pane) => {
+				pane.dispatchEvent(
+					new MouseEvent('contextmenu', { clientX: 500, clientY: 300, button: 2, bubbles: true })
+				);
+			});
+		await page.getByRole('menuitem', { name: 'Link', exact: true }).click();
+	} else {
+		await page.getByRole('button', { name: 'Create Link node', exact: true }).click();
+	}
 	await page.waitForFunction(
 		(ids) =>
 			[...document.querySelectorAll('.svelte-flow__node')].some(
@@ -36,13 +107,47 @@ async function checkLinkNode(canvasName) {
 			before
 		);
 	const node = page.locator(`.svelte-flow__node[data-id="${id}"]`);
-	await node.getByText('Link', { exact: true }).click();
 	const sidebar = page.getByRole('complementary');
-	await sidebar.getByLabel('URL', { exact: true }).fill('https://github.com/example/repository');
-	const title = `Unified Link ${canvasName} ${Date.now()}`;
+	await sidebar.getByLabel('URL', { exact: true }).waitFor();
+	await page.waitForFunction(() => document.activeElement?.id === 'url');
+	if (await sidebar.getByRole('button', { name: 'Edit title', exact: true }).count())
+		throw new Error('new link should start with the URL, not title editing');
+	await sidebar.getByLabel('URL', { exact: true }).fill('github.com/example/repository');
+	await sidebar.getByLabel('URL', { exact: true }).blur();
+	await node.getByRole('button', { name: 'Open GitHub', exact: true }).waitFor();
+	await node.getByText('GitHub', { exact: true }).waitFor();
+	await sidebar.getByRole('button', { name: 'Edit title', exact: true }).click();
+	if ((await sidebar.getByLabel('Title', { exact: true }).inputValue()) !== '')
+		throw new Error('automatic title should remain an empty override');
+	if ((await sidebar.getByLabel('Title', { exact: true }).getAttribute('placeholder')) !== 'GitHub')
+		throw new Error('title placeholder did not follow service detection');
+	const title = `Unified Link ${canvasName} ${source} ${Date.now()}`;
 	await sidebar.getByLabel('Title', { exact: true }).fill(title);
+	await sidebar.getByLabel('Title', { exact: true }).press('Enter');
+	await sidebar.getByRole('heading', { name: title, exact: true }).waitFor();
+	await sidebar.getByRole('button', { name: 'Edit title', exact: true }).click();
+	await sidebar.getByLabel('Title', { exact: true }).fill('Discarded draft');
+	await sidebar.getByLabel('Title', { exact: true }).press('Escape');
+	await sidebar.getByLabel('URL', { exact: true }).fill('https://www.figma.com/design/123/Test');
+	await node.getByRole('button', { name: 'Open Figma', exact: true }).waitFor();
+	await node.locator('img[src="/link-icons/figma.svg"]').first().waitFor();
+	await page.waitForFunction(
+		(nodeId) =>
+			[
+				...document.querySelectorAll(`[data-id="${nodeId}"] img[src="/link-icons/figma.svg"]`)
+			].every((img) => img.complete && img.naturalWidth > 0),
+		id
+	);
+	await node.getByText(title, { exact: true }).waitFor();
+	await sidebar.getByRole('heading', { name: title, exact: true }).waitFor();
+	if (await sidebar.getByRole('textbox', { name: 'Title', exact: true }).count())
+		throw new Error('duplicate title input remains visible');
+	if (canvasName === 'project' && source === 'toolbar') await checkNodeDetails(sidebar, node);
+	if (canvasName === 'project' && process.env.BORG_TEST_SCREENSHOT)
+		await page.screenshot({ path: process.env.BORG_TEST_SCREENSHOT });
+	await sidebar.getByLabel('URL', { exact: true }).fill('https://github.com/example/repository');
 	await node.getByText('Code', { exact: true }).waitFor();
-	await node.getByRole('button', { name: 'Open github.com', exact: true }).waitFor();
+	await node.getByRole('button', { name: 'Open GitHub', exact: true }).waitFor();
 	await sidebar.getByRole('button', { name: 'Iframe', exact: true }).click();
 	await node.locator('iframe').waitFor();
 	if (
@@ -54,7 +159,14 @@ async function checkLinkNode(canvasName) {
 	await page.reload();
 	await node.getByText(title, { exact: true }).waitFor();
 	if (await node.locator('iframe').count()) throw new Error('view mode did not persist');
-	console.log(`${canvasName}: link detection, both views, and reload persistence passed`);
+	if (canvasName === 'project' && source === 'toolbar') {
+		await node.getByText('Room 401', { exact: true }).waitFor();
+		await node.getByRole('button', { name: 'Open arXiv', exact: true }).waitFor();
+		console.log('details reload persistence passed');
+	}
+	console.log(
+		`${canvasName} (${source}): URL focus, detection, title editing, views, icons, and reload persistence passed`
+	);
 }
 
 async function checkLegacyLinks() {
@@ -157,6 +269,7 @@ try {
 	);
 	await page.getByRole('button', { name: 'Projects', exact: true }).waitFor();
 	await checkLinkNode('overview');
+	await checkLinkNode('overview', 'menu');
 	await checkLegacyLinks();
 
 	await page
@@ -215,6 +328,7 @@ try {
 	await page.locator('.svelte-flow__node').nth(1).waitFor();
 	console.log('node persistence after reload passed');
 	await checkLinkNode('project');
+	await checkLinkNode('project', 'menu');
 	if (errors.length) throw new Error(errors.join('\n'));
 	console.log('PAGE_ERRORS', errors);
 } catch (error) {

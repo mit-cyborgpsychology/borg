@@ -1,16 +1,17 @@
 <script lang="ts">
-	import { describeLink } from '$lib/features/links/linkNode';
 	import {
 		getTemplate,
-		getSuggestedFields,
 		type NodeTemplate,
 		type TemplateField,
 		type CustomField
 	} from '../templates';
 	import FieldRenderer from './fields/FieldRenderer.svelte';
-	import CustomFieldManager from './fields/CustomFieldManager.svelte';
+	import NodeDetails from './fields/NodeDetails.svelte';
 	import FieldVisibilityManager from './fields/FieldVisibilityManager.svelte';
-	import { Lock, Unlock, Trash2, Plus } from '@lucide/svelte';
+	import LinkSettings from './fields/LinkSettings.svelte';
+	import InspectorTitle from './fields/InspectorTitle.svelte';
+	import { describeLink } from '$lib/features/links/linkNode';
+	import { Lock, Unlock, Trash2 } from '@lucide/svelte';
 
 	let {
 		nodeId,
@@ -31,8 +32,6 @@
 	let template: NodeTemplate = $derived(getTemplate(templateType || 'blank'));
 	let editableData = $state({ ...nodeData });
 	let customFields = $state<(TemplateField | CustomField)[]>([]);
-	let isProjectMetadata = $derived(templateType === 'project');
-	let suggestedFields = $derived(getSuggestedFields(templateType || 'blank'));
 
 	// Reset data when node changes
 	$effect(() => {
@@ -92,27 +91,6 @@
 		}
 	}
 
-	function addSuggestedField(suggestedField: TemplateField) {
-		// Check if field already exists in custom fields
-		const existsInCustom = customFields.some((field) => field.id === suggestedField.id);
-		if (existsInCustom) return;
-
-		// Check if field already exists in template fields
-		const existsInTemplate = template.fields.some((field) => field.id === suggestedField.id);
-		if (existsInTemplate) return;
-
-		// Add the suggested field to custom fields
-		customFields = [...customFields, { ...suggestedField, isCustom: true }];
-	}
-
-	// Get available suggested fields (not already added)
-	let availableSuggestedFields = $derived(
-		suggestedFields.filter((suggestedField) => {
-			const existsInCustom = customFields.some((field) => field.id === suggestedField.id);
-			const existsInTemplate = template.fields.some((field) => field.id === suggestedField.id);
-			return !existsInCustom && !existsInTemplate;
-		})
-	);
 	const appearanceIds = new Set([
 		'style',
 		'backgroundColor',
@@ -123,11 +101,24 @@
 		'rotation',
 		'viewMode'
 	]);
+	let titleField = $derived(
+		template.fields.find(
+			(field: TemplateField) =>
+				(field.id === 'title' || field.id === 'name') && field.type === 'text'
+		)
+	);
+	let genericFields = $derived(
+		template.fields.filter(
+			(field: TemplateField) =>
+				field.id !== titleField?.id &&
+				(template.id !== 'link' || !['url', 'description', 'viewMode'].includes(field.id))
+		)
+	);
 	let fieldGroups = $derived(
 		[
 			{
 				title: 'Content',
-				fields: template.fields.filter(
+				fields: genericFields.filter(
 					(field) =>
 						!appearanceIds.has(field.id) &&
 						!['status', 'select', 'people-selector', 'tags'].includes(field.type)
@@ -135,7 +126,7 @@
 			},
 			{
 				title: 'Properties',
-				fields: template.fields.filter(
+				fields: genericFields.filter(
 					(field) =>
 						!appearanceIds.has(field.id) &&
 						['status', 'select', 'people-selector', 'tags'].includes(field.type)
@@ -143,42 +134,49 @@
 			},
 			{
 				title: 'Appearance',
-				fields: template.fields.filter((field) => appearanceIds.has(field.id))
+				fields: genericFields.filter((field) => appearanceIds.has(field.id))
 			}
 		].filter((group) => group.fields.length > 0)
 	);
 </script>
 
 <header class="shrink-0 border-b border-zinc-200 px-4 py-3">
-	<div class="mb-2 flex items-center justify-between gap-3">
-		<span class="flex items-center gap-2 font-mono text-xs font-medium text-zinc-500">
-			<span class="h-2 w-2 rounded-sm" style:background-color={template.color}></span>
-			{template.id === 'link' ? `Link · ${describeLink(editableData.url).label}` : template.name}
-		</span>
-		<button
-			onclick={() => {
-				editableData.locked = !editableData.locked;
-			}}
-			aria-label={editableData.locked ? 'Unlock node' : 'Lock node'}
-			aria-pressed={!!editableData.locked}
-			title={editableData.locked ? 'Unlock position' : 'Lock position'}
-			class="rounded p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-blue-500"
-		>
-			{#if editableData.locked}<Lock class="h-3.5 w-3.5" />{:else}<Unlock
-					class="h-3.5 w-3.5"
-				/>{/if}
-		</button>
-	</div>
+	{#if titleField && (template.id !== 'link' || editableData.title || describeLink(editableData.url).url)}
+		<div class="mb-2">
+			{#key nodeId}
+				<InspectorTitle
+					bind:value={editableData[titleField.id]}
+					fallback={template.id === 'link'
+						? describeLink(editableData.url).providerName || 'Link'
+						: template.name}
+					automatic={template.id === 'link'}
+				/>
+			{/key}
+		</div>
+	{/if}
 	<div class="flex items-center justify-between gap-3">
-		<h2 class="min-w-0 truncate font-sans text-sm font-semibold text-zinc-900">
-			{editableData.title ||
-				editableData.name ||
-				(template.id === 'link' && describeLink(editableData.url).hostname) ||
-				template.name}
-		</h2>
-		{#if isSaving && !error}
-			<span role="status" class="shrink-0 font-mono text-[11px] text-zinc-400">Saving…</span>
-		{/if}
+		<span class=" flex items-center gap-2 text-xs font-medium text-zinc-500">
+			<span class="h-2 w-2 rounded-sm" style:background-color={template.color}></span>
+			{template.name}
+		</span>
+		<div class="flex shrink-0 items-center gap-2">
+			{#if isSaving && !error}
+				<span role="status" class=" text-[11px] text-zinc-400">Saving…</span>
+			{/if}
+			<button
+				onclick={() => {
+					editableData.locked = !editableData.locked;
+				}}
+				aria-label={editableData.locked ? 'Unlock node' : 'Lock node'}
+				aria-pressed={!!editableData.locked}
+				title={editableData.locked ? 'Unlock position' : 'Lock position'}
+				class="rounded p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-blue-500"
+			>
+				{#if editableData.locked}<Lock class="h-3.5 w-3.5" />{:else}<Unlock
+						class="h-3.5 w-3.5"
+					/>{/if}
+			</button>
+		</div>
 	</div>
 </header>
 
@@ -187,6 +185,9 @@
 	</p>{/if}
 
 <div class="inspector-fields min-h-0 flex-1 overflow-y-auto overscroll-contain text-xs">
+	{#if template.id === 'link'}
+		{#key nodeId}<LinkSettings bind:value={editableData} />{/key}
+	{/if}
 	{#each fieldGroups as group (group.title)}
 		<section class="border-b border-zinc-200 px-4 py-4" aria-label={group.title}>
 			<h3 class="mb-2 font-sans text-xs font-semibold text-zinc-900">{group.title}</h3>
@@ -200,22 +201,7 @@
 						nodeData={editableData}
 					/>
 				{/each}
-				{#if template.id === 'link' && group.title === 'Content' && editableData.url && !describeLink(editableData.url).url}
-					<p role="status" class="text-xs text-amber-700">
-						Enter a valid http or https web address.
-					</p>
-				{/if}
-				{#if template.id === 'link' && group.title === 'Appearance' && editableData.viewMode === 'Iframe'}
-					<p class="text-[11px] leading-relaxed text-zinc-500">
-						Some websites block embedding. You can always open the link in a new tab.
-					</p>
-				{/if}
 			</div>
-			{#if isProjectMetadata && group.title === 'Content'}
-				<p class="mt-3 text-[11px] leading-relaxed text-zinc-400">
-					Changes are shared with the project.
-				</p>
-			{/if}
 		</section>
 	{/each}
 
@@ -223,58 +209,27 @@
 		<section class="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-4">
 			<div>
 				<h3 class="font-sans text-xs font-semibold text-zinc-900">Countdown</h3>
-				<p class="mt-1 text-[11px] text-zinc-400">Show the event name and time remaining</p>
 			</div>
 			<input
 				type="checkbox"
 				aria-label="Countdown mode"
+				title="Show the event name and time remaining"
 				bind:checked={editableData.countdownMode}
 				class="h-4 w-4 accent-blue-600"
 			/>
 		</section>
 	{/if}
 
-	{#if customFields.length > 0}
-		<section class="border-b border-zinc-200 px-4 py-4" aria-label="Custom properties">
-			<h3 class="mb-2 font-sans text-xs font-semibold text-zinc-900">Custom properties</h3>
-			<div class="space-y-2.5">
-				{#each customFields as field (field.id)}
-					<FieldRenderer
-						{field}
-						bind:value={editableData[field.id]}
-						readonly={false}
-						mode="edit"
-						nodeData={editableData}
-					/>
-				{/each}
-			</div>
-		</section>
-	{/if}
-
-	<section class="border-b border-zinc-200 px-4 py-4" aria-label="Add properties">
-		{#if availableSuggestedFields.length > 0}
-			<h3 class="mb-2 font-sans text-xs font-semibold text-zinc-900">Add properties</h3>
-			<div class="mb-2.5 flex flex-wrap gap-1.5">
-				{#each availableSuggestedFields as field (field.id)}
-					<button
-						onclick={() => addSuggestedField(field)}
-						class="flex items-center gap-1 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50"
-						><Plus class="h-3 w-3" />{field.label}</button
-					>
-				{/each}
-			</div>
-		{/if}
-		<div class="[&_h4]:font-sans [&>div]:mt-0 [&>div]:border-0 [&>div]:pt-0">
-			<CustomFieldManager bind:customFields bind:nodeData={editableData} />
-		</div>
-	</section>
+	{#key nodeId}
+		<NodeDetails
+			bind:fields={customFields}
+			bind:data={editableData}
+			templateFields={template.fields}
+		/>
+	{/key}
 	<section class="border-b border-zinc-200 px-4 py-4" aria-label="Visible on canvas">
 		<div class="[&_h4]:font-sans [&>div]:mt-0 [&>div]:border-0 [&>div]:pt-0">
-			<FieldVisibilityManager
-				templateFields={template.fields}
-				bind:customFields
-				bind:nodeData={editableData}
-			/>
+			<FieldVisibilityManager templateFields={template.fields} bind:nodeData={editableData} />
 		</div>
 	</section>
 </div>

@@ -5,9 +5,21 @@
 		event.preventDefault();
 		creationMenu = { x: event.clientX, y: event.clientY };
 	}
+	async function createCanvasNode(type: string, position: { x: number; y: number }) {
+		if (!nodesService) return { ok: false } as const;
+		const result = await editCommand.run(() => nodesService.addNode(type, position));
+		if (result.ok && result.value.data.templateType === 'link') {
+			handleNodeEdit({
+				nodeId: result.value.id,
+				nodeData: result.value.data.nodeData as Record<string, unknown>,
+				templateType: 'link'
+			});
+		}
+		return result;
+	}
 	async function createFromMenu(type: string, position: { x: number; y: number }) {
 		if (!nodesService) return false;
-		const result = await editCommand.run(() => nodesService.addNode(type, position));
+		const result = await createCanvasNode(type, position);
 		if (!result.ok)
 			throw new Error($editCommand.error || 'Could not create node. Please try again.');
 		return true;
@@ -391,11 +403,7 @@
 			y: Math.random() * 400 + 200
 		};
 
-		try {
-			await nodesService.addNode(templateType, position);
-		} catch (error) {
-			console.error('Failed to create node:', error);
-		}
+		await createCanvasNode(templateType, position);
 	}
 
 	// Check for projects changes
@@ -420,6 +428,7 @@
 		editNodeData = nodeData;
 		editTemplateType = templateType;
 		showEditPanel = true;
+		showStickerPanel = false;
 	};
 
 	const handleNodeDelete = async (payload: CanvasPayloads['nodeDelete']) => {

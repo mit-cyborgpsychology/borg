@@ -7,6 +7,7 @@
 	import { onDestroy } from 'svelte';
 	import { createProjectState } from '$lib/features/projects/createProjectState';
 	import AsyncStatus from '$lib/components/AsyncStatus.svelte';
+	import StatusOverlay from '$lib/components/StatusOverlay.svelte';
 	import { goto } from '$app/navigation';
 	import { ChevronLeft } from '@lucide/svelte';
 
@@ -37,39 +38,43 @@
 	<title>{project?.title || 'Project'} | BORG</title>
 </svelte:head>
 
-<AsyncStatus state={$resource} onRetry={() => void feature.load(projectSlug)} />
-{#if loading}
-	<div class="flex h-screen w-full items-center justify-center bg-borg-beige">
-		<div class="text-center">
-			<div
-				class="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"
-			></div>
-			<p class="text-black">Loading project...</p>
-		</div>
-	</div>
-{:else if project}
-	<div class="relative h-screen w-full">
-		<!-- Floating top bar -->
-		<div class="absolute top-3 left-3 z-50 flex items-center gap-2">
-			<button
-				onclick={() => goto('/')}
-				class="flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
-			>
-				<ChevronLeft class="h-3.5 w-3.5" />
-				Projects
-			</button>
-			<div class="flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2 py-1">
-				<PresenceAvatars room={projectSlug} />
+<div class="relative h-screen w-full overflow-hidden">
+	<StatusOverlay>
+		<AsyncStatus state={$resource} onRetry={() => void feature.load(projectSlug)} />
+	</StatusOverlay>
+	{#if loading}
+		<div class="flex h-screen w-full items-center justify-center bg-borg-beige">
+			<div class="text-center">
+				<div
+					class="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"
+				></div>
+				<p class="text-black">Loading project...</p>
 			</div>
 		</div>
+	{:else if project}
+		<div class="relative h-screen w-full">
+			<!-- Floating top bar -->
+			<div class="absolute top-3 left-3 z-50 flex items-center gap-2">
+				<button
+					onclick={() => goto('/')}
+					class="flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
+				>
+					<ChevronLeft class="h-3.5 w-3.5" />
+					Projects
+				</button>
+				<div class="flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2 py-1">
+					<PresenceAvatars room={projectSlug} />
+				</div>
+			</div>
 
-		<!-- Canvas fills full height -->
-		<SvelteFlowProvider>
-			{#key projectSlug}<Canvas
-					{projectSlug}
-					onProjectUpdate={handleProjectUpdate}
-					onPanelOpen={() => {}}
-				/>{/key}
-		</SvelteFlowProvider>
-	</div>
-{/if}
+			<!-- Canvas fills full height -->
+			<SvelteFlowProvider>
+				{#key projectSlug}<Canvas
+						{projectSlug}
+						onProjectUpdate={handleProjectUpdate}
+						onPanelOpen={() => {}}
+					/>{/key}
+			</SvelteFlowProvider>
+		</div>
+	{/if}
+</div>

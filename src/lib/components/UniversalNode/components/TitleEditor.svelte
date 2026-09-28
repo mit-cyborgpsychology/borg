@@ -4,13 +4,15 @@
 		isEditingTitle = $bindable(),
 		onSave,
 		isProjectNode = false,
-		isBeingEdited = false
+		isBeingEdited = false,
+		fallbackTitle = 'Untitled'
 	} = $props<{
 		nodeData: any;
 		isEditingTitle: boolean;
 		onSave: (title: string) => void;
 		isProjectNode?: boolean;
 		isBeingEdited?: boolean;
+		fallbackTitle?: string;
 	}>();
 
 	let titleContent = $state('');
@@ -74,7 +76,7 @@
 		class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black focus:ring-2 focus:ring-borg-blue focus:outline-none {isProjectNode
 			? 'text-xl font-semibold'
 			: 'text-base'}"
-		placeholder="Enter title..."
+		placeholder={fallbackTitle}
 	/>
 {:else}
 	<div
@@ -85,6 +87,6 @@
 			? '-mt-2 text-3xl'
 			: 'font-sans text-base leading-snug text-balance'}"
 	>
-		{nodeData.title || 'Untitled'}
+		{nodeData.title || fallbackTitle}
 	</div>
 {/if}

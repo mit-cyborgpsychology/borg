@@ -14,6 +14,7 @@
 		Lock,
 		Unlock
 	} from '@lucide/svelte';
+	import LinkIcon from '../../fields/LinkIcon.svelte';
 	import { describeLink } from '$lib/features/links/linkNode';
 	import type { NodeTemplate } from '../../../templates';
 
@@ -165,7 +166,9 @@
 		class="flex h-7 items-center justify-between gap-3 rounded-t-lg border-b border-zinc-100 bg-zinc-50/70 px-2.5"
 	>
 		<div class="flex min-w-0 items-center gap-1.5">
-			{#if statusIcon}
+			{#if template.id === 'link'}
+				<LinkIcon url={nodeData.url} size="h-3 w-3" />
+			{:else if statusIcon}
 				{@const StatusIconComponent = statusIcon.component}
 				<StatusIconComponent class="h-3 w-3 shrink-0" style="color: {statusIcon.color};" />
 			{/if}

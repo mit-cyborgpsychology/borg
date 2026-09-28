@@ -22,7 +22,11 @@
 	{#if readonly || mode === 'display'}
 		<div class="py-1 text-black">
 			{#if value}
-				{@const targetDate = new Date(value)}
+				{@const targetDate = new Date(
+					typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+						? `${value}T00:00:00`
+						: value
+				)}
 				{@const now = new Date()}
 				{#if targetDate > now}
 					{@const timeDiff = targetDate.getTime() - now.getTime()}

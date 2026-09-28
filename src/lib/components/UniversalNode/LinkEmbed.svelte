@@ -3,7 +3,7 @@
 	import { Handle, Position, useSvelteFlow } from '@xyflow/svelte';
 	import { Lock, Unlock, Trash2 } from '@lucide/svelte';
 	import { getCanvasActions } from '$lib/features/canvas/context';
-	import { describeLink } from '$lib/features/links/linkNode';
+	import { describeLink, getLinkTitle } from '$lib/features/links/linkNode';
 
 	let { data, id } = $props<{ data: any; id: string; isBeingEdited?: boolean }>();
 	const actions = getCanvasActions();
@@ -86,7 +86,7 @@
 		{#if link.url}
 			<iframe
 				src={link.url}
-				title={nodeData.title || `${link.label}: ${link.hostname}`}
+				title={getLinkTitle(nodeData)}
 				class="nodrag nowheel h-full w-full rounded-t-lg border-0 bg-white"
 				style:pointer-events={resizing ? 'none' : 'auto'}
 				sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
@@ -115,9 +115,9 @@
 	<div
 		class="flex items-center justify-between gap-3 border-t border-zinc-200 px-2 py-2 font-sans text-xs text-zinc-500"
 	>
-		<span class="min-w-0 truncate" title={nodeData.title || link.hostname}
-			>{nodeData.title || link.hostname || 'Link'}
-			<span class="font-mono text-[10px] text-zinc-400">· {link.label}</span></span
+		<span class="min-w-0 truncate" title={getLinkTitle(nodeData)}
+			>{getLinkTitle(nodeData)}
+			<span class=" text-[10px] text-zinc-400">· {link.label}</span></span
 		>
 		<div class="nodrag flex shrink-0 items-center gap-3">
 			{#if link.url}<a

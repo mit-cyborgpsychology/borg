@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { describeLink, normalizeLinkUrl } from '$lib/features/links/linkNode';
+	import { hasDetailValue } from '$lib/features/canvas/nodeDetails';
 	import FieldRenderer from '../../fields/FieldRenderer.svelte';
 	import TitleEditor from './TitleEditor.svelte';
 	import type { NodeTemplate, TemplateField } from '../../../templates';
@@ -73,15 +74,8 @@
 					{#if template.id === 'link' && field.id === 'url'}
 						{@const link = describeLink(nodeData.url)}
 						{#if link.url}
-							{@const originalLinkField = (
-								nodeData.customFields as TemplateField[] | undefined
-							)?.find(
-								(customField) =>
-									customField.type === 'link' &&
-									normalizeLinkUrl(nodeData[customField.id]) === link.url
-							)}
 							<FieldRenderer
-								field={{ ...field, label: originalLinkField?.label || link.hostname }}
+								field={{ ...field, label: link.providerName }}
 								value={link.url}
 								readonly={true}
 								mode="display"
@@ -98,9 +92,10 @@
 						{/if}
 					{:else if field.id === 'title'}
 						<TitleEditor
-							nodeData={template.id === 'link' && !nodeData.title
-								? { ...nodeData, title: describeLink(nodeData.url).hostname || 'Add a link' }
-								: nodeData}
+							{nodeData}
+							fallbackTitle={template.id === 'link'
+								? describeLink(nodeData.url).providerName || 'Add a link'
+								: 'Untitled'}
 							bind:isEditingTitle
 							onSave={onTitleSave}
 							isProjectNode={templateType === 'project'}
@@ -126,7 +121,7 @@
 						field.type === 'link' &&
 						displayedLinkUrl &&
 						normalizeLinkUrl(nodeData[field.id]) === displayedLinkUrl}
-					{#if isVisible && field.id !== 'status' && !duplicatesPrimaryLink}
+					{#if isVisible && field.id !== 'status' && !duplicatesPrimaryLink && (field.type === 'button' || hasDetailValue(nodeData[field.id]))}
 						{#if field.id === 'title'}
 							<TitleEditor
 								{nodeData}

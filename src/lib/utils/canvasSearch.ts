@@ -1,4 +1,5 @@
 import type { Node } from '@xyflow/svelte';
+import { describeLink } from '../features/links/linkNode.ts';
 
 export interface SearchState {
 	query: string;
@@ -40,8 +41,9 @@ export function updateMatchingNodes(
 	state.matchingNodeIds = nodes
 		.filter((node) => {
 			// Search through all fields in nodeData
-			const nodeData = node.data?.nodeData || {};
-			const searchableText = Object.values(nodeData)
+			const nodeData = (node.data?.nodeData || {}) as Record<string, unknown>;
+			const link = node.data?.templateType === 'link' ? describeLink(nodeData.url) : null;
+			const searchableText = [...Object.values(nodeData), link?.providerName, link?.label]
 				.filter((value) => typeof value === 'string')
 				.join(' ')
 				.toLowerCase();
@@ -78,7 +80,10 @@ export function navigateToMatch(
 	const nodeId = state.matchingNodeIds[state.currentMatchIndex];
 	const node = nodes.find((n) => n.id === nodeId);
 	if (node && node.position) {
-		setViewport({ x: -node.position.x + 400, y: -node.position.y + 300, zoom: 1 }, { duration: 300 });
+		setViewport(
+			{ x: -node.position.x + 400, y: -node.position.y + 300, zoom: 1 },
+			{ duration: 300 }
+		);
 
 		// Add highlight to current node after a short delay to ensure it's rendered
 		setTimeout(() => {

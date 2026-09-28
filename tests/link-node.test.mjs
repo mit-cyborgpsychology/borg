@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
 	describeLink,
+	getLinkTitle,
 	normalizeLinkNode,
 	normalizeLinkUrl
 } from '../src/lib/features/links/linkNode.ts';
 import { getTemplate, nodeTemplates } from '../src/lib/templates.ts';
 import { createNodeService } from '../src/lib/services/NodeService.ts';
+import { updateMatchingNodes } from '../src/lib/utils/canvasSearch.ts';
 
 test('link detection uses the hostname and path, not substrings in arbitrary URLs', () => {
 	for (const [url, label] of [
@@ -37,6 +39,46 @@ test('navigation and iframe URLs accept web addresses and reject unsafe or inval
 	]) {
 		assert.equal(normalizeLinkUrl(url), '');
 	}
+});
+
+test('service names and icons are derived from the URL with specific paths taking priority', () => {
+	for (const [url, providerId, providerName] of [
+		['github.com/example/repo', 'github', 'GitHub'],
+		['https://huggingface.co/org/model', 'huggingface', 'Hugging Face'],
+		['https://miro.com/app/board/123', 'miro', 'Miro'],
+		['https://colab.research.google.com/drive/123', 'googlecolab', 'Google Colab'],
+		['https://zenodo.org/records/123', 'zenodo', 'Zenodo'],
+		['https://observablehq.com/@user/notebook', 'observable', 'Observable'],
+		['https://www.figma.com/design/123/Test', 'figma', 'Figma'],
+		['https://www.figma.com/deck/123/Test', 'figma', 'Figma Slides'],
+		['https://docs.google.com/spreadsheets/d/123', 'sheets', 'Google Sheets'],
+		['https://docs.google.com/presentation/d/123', 'slides', 'Google Slides'],
+		['https://docs.google.com/document/d/123', 'docs', 'Google Docs'],
+		['https://arxiv.org/abs/1234.5678', 'arxiv', 'arXiv'],
+		['https://example.com/?url=https://figma.com', '', 'example.com'],
+		['https://figma.com.example.org/design/123', '', 'figma.com.example.org']
+	]) {
+		const link = describeLink(url);
+		assert.equal(link.providerId, providerId);
+		assert.equal(link.providerName, providerName);
+	}
+	assert.equal(describeLink('').providerName, '');
+});
+
+test('automatic titles follow the link while user titles are preserved and detection is searchable', () => {
+	const data = { url: 'https://figma.com/deck/123', title: '' };
+	assert.equal(getLinkTitle(data), 'Figma Slides');
+	assert.equal(data.title, '', 'the fallback is derived, not written over the user title');
+	assert.equal(getLinkTitle({ ...data, title: 'Project overview' }), 'Project overview');
+	assert.equal(getLinkTitle({ url: '' }), 'Link');
+	const state = { query: '', matchingNodeIds: [], currentMatchIndex: 0 };
+	updateMatchingNodes(
+		'Figma Slides',
+		[{ id: 'link', data: { templateType: 'link', nodeData: data } }],
+		state,
+		() => {}
+	);
+	assert.deepEqual(state.matchingNodeIds, ['link']);
 });
 
 test('legacy papers and code retain metadata, secondary links, and custom fields', () => {

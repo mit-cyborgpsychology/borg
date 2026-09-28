@@ -1,0 +1,193 @@
+{
+  "package": "simple-icons@16.33.0",
+  "repository": "https://github.com/simple-icons/simple-icons",
+  "icons": {
+    "gitlab": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/gitlab.svg",
+      "title": "GitLab",
+      "slug": "gitlab",
+      "hex": "FC6D26",
+      "source": "https://about.gitlab.com/press/press-kit/",
+      "guidelines": "https://about.gitlab.com/handbook/marketing/corporate-marketing/brand-activation/trademark-guidelines/"
+    },
+    "bitbucket": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/bitbucket.svg",
+      "title": "Bitbucket",
+      "slug": "bitbucket",
+      "hex": "0052CC",
+      "source": "https://atlassian.design/resources/logo-library",
+      "guidelines": "https://atlassian.design/foundations/logos"
+    },
+    "codeberg": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/codeberg.svg",
+      "title": "Codeberg",
+      "slug": "codeberg",
+      "hex": "2185D0",
+      "source": "https://codeberg.org/Codeberg/Design/src/commit/ac514aa9aaa2457d4af3c3e13df3ab136d22a49a/logo/special/codeberg-logo_special_fake-transaprency.svg",
+      "guidelines": "https://codeberg.org/Codeberg/Design",
+      "license": {
+        "type": "CC0-1.0"
+      }
+    },
+    "deepnote": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/deepnote.svg",
+      "title": "Deepnote",
+      "slug": "deepnote",
+      "hex": "3793EF",
+      "source": "https://deepnote.com"
+    },
+    "arxiv": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/arxiv.svg",
+      "title": "arXiv",
+      "slug": "arxiv",
+      "hex": "B31B1B",
+      "source": "https://arxiv.org",
+      "guidelines": "https://arxiv.org/about/brand"
+    },
+    "doi": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/doi.svg",
+      "title": "DOI",
+      "slug": "doi",
+      "hex": "FAB70C",
+      "source": "https://www.doi.org/images/logos/header_logo_cropped.svg",
+      "guidelines": "https://www.doi.org/resources/130718-trademark-policy.pdf"
+    },
+    "pubmed": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/pubmed.svg",
+      "title": "PubMed",
+      "slug": "pubmed",
+      "hex": "326599",
+      "source": "https://pubmed.ncbi.nlm.nih.gov"
+    },
+    "acm": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/acm.svg",
+      "title": "ACM",
+      "slug": "acm",
+      "hex": "0085CA",
+      "source": "https://identitystandards.acm.org"
+    },
+    "ieee": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/ieee.svg",
+      "title": "IEEE",
+      "slug": "ieee",
+      "hex": "00629B",
+      "source": "https://brand-experience.ieee.org/templates-tools-resources/resources/master-brand-and-logos/",
+      "guidelines": "https://brand-experience.ieee.org/guidelines/brand-identity/"
+    },
+    "notion": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/notion.svg",
+      "title": "Notion",
+      "slug": "notion",
+      "hex": "000000",
+      "source": "https://www.notion.so"
+    },
+    "youtube": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/youtube.svg",
+      "title": "YouTube",
+      "slug": "youtube",
+      "hex": "FF0000",
+      "source": "https://www.youtube.com/howyoutubeworks/resources/brand-resources/#logos-icons-and-colors",
+      "guidelines": "https://www.youtube.com/howyoutubeworks/resources/brand-resources/#logos-icons-and-colors"
+    },
+    "vimeo": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/vimeo.svg",
+      "title": "Vimeo",
+      "slug": "vimeo",
+      "hex": "1AB7EA",
+      "source": "https://press.vimeo.com/brand-guidelines",
+      "guidelines": "https://press.vimeo.com/brand-guidelines"
+    },
+    "figma": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/figma.svg",
+      "title": "Figma",
+      "slug": "figma",
+      "hex": "F24E1E",
+      "source": "https://www.figma.com/using-the-figma-brand/",
+      "guidelines": "https://www.figma.com/using-the-figma-brand/"
+    },
+    "dropbox": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/dropbox.svg",
+      "title": "Dropbox",
+      "slug": "dropbox",
+      "hex": "0061FF",
+      "source": "https://www.dropbox.com/branding"
+    },
+    "miro": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/miro.svg",
+      "title": "Miro",
+      "slug": "miro",
+      "hex": "050038",
+      "source": "https://miro.com"
+    },
+    "huggingface": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/huggingface.svg",
+      "title": "Hugging Face",
+      "slug": "huggingface",
+      "hex": "FFD21E",
+      "source": "https://huggingface.co/brand",
+      "guidelines": "https://huggingface.co/brand"
+    },
+    "kaggle": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/kaggle.svg",
+      "title": "Kaggle",
+      "slug": "kaggle",
+      "hex": "20BEFF",
+      "source": "https://www.kaggle.com/brand-guidelines",
+      "guidelines": "https://www.kaggle.com/brand-guidelines"
+    },
+    "zenodo": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/zenodo.svg",
+      "title": "Zenodo",
+      "slug": "zenodo",
+      "hex": "1682D4",
+      "source": "https://about.zenodo.org",
+      "guidelines": "https://about.zenodo.org"
+    },
+    "osf": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/osf.svg",
+      "title": "OSF",
+      "slug": "osf",
+      "hex": "2CB9F1",
+      "source": "https://github.com/CenterForOpenScience/osf.io/blob/de170682924278eba1db9d6e1c50166bf43700e0/website/static/img/circle_logo.png",
+      "aliases": {
+        "aka": [
+          "Open Science Framework"
+        ],
+        "dup": [
+          {
+            "title": "Center for Open Science",
+            "source": "https://www.cos.io/initiatives/top-guidelines"
+          }
+        ]
+      }
+    },
+    "codesandbox": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/codesandbox.svg",
+      "title": "CodeSandbox",
+      "slug": "codesandbox",
+      "hex": "151515",
+      "source": "https://codesandbox.io/CodeSandbox-Press-Kit.zip"
+    },
+    "stackblitz": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/stackblitz.svg",
+      "title": "StackBlitz",
+      "slug": "stackblitz",
+      "hex": "1269D3",
+      "source": "https://stackblitz.com"
+    },
+    "googlecolab": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/googlecolab.svg",
+      "title": "Google Colab",
+      "slug": "googlecolab",
+      "hex": "F9AB00",
+      "source": "https://colab.research.google.com"
+    },
+    "observable": {
+      "download": "https://cdn.jsdelivr.net/npm/simple-icons@16.33.0/icons/observable.svg",
+      "title": "Observable",
+      "slug": "observable",
+      "hex": "353E58",
+      "source": "https://observablehq.com"
+    }
+  }
+}
