@@ -13,6 +13,7 @@
 	const { projectsService, authStore, taskService } = getAppServices();
 	const featureState = createProjectsState(projectsService, taskService);
 	const resource = featureState.list;
+	const summaries = featureState.summaries;
 	const command = featureState.command;
 	onDestroy(() => featureState.dispose());
 
@@ -23,14 +24,20 @@
 	let projects = $derived($resource.data.projects);
 	let showProjectComposer = $state(false);
 	let searchQuery = $state('');
-	let projectCounts = $derived($resource.data.counts);
-	let projectTaskCounts = $derived($resource.data.taskCounts);
+	let projectCounts = $derived($summaries.data.counts);
+	let projectTaskCounts = $derived($summaries.data.taskCounts);
 	let dataLoaded = $derived($resource.status !== 'idle');
 	let creatingProject = $state(false);
 	let deletingProjects = $state<Set<string>>(new Set());
 
 	onMount(() => {
 		loadProjects();
+	});
+
+	$effect(() => {
+		if (viewMode === 'list' && $resource.status === 'ready') {
+			void featureState.loadSummaries(projects);
+		}
 	});
 
 	async function loadProjects(force = false) {
@@ -149,6 +156,9 @@
 			{/if}
 
 			<!-- List View -->
+			{#if $summaries.status === 'error'}
+				<AsyncStatus state={$summaries} onRetry={() => void featureState.loadSummaries(projects)} />
+			{/if}
 			{#if projects.filter((p) => p.id !== 'project-canvas').length === 0}
 				<div class="flex h-64 flex-col items-center justify-center text-center">
 					<FolderOpen class="mb-4 h-8 w-8 text-zinc-300" />
@@ -161,8 +171,8 @@
 									?.toLowerCase()
 									.includes(searchQuery.toLowerCase()))) as project}
 						{@const isDeleting = deletingProjects.has(project.slug)}
-						{@const counts = projectCounts[project.slug] || { todo: 0, doing: 0, done: 0 }}
-						{@const taskCount = projectTaskCounts[project.slug] || 0}
+						{@const counts = projectCounts[project.slug]}
+						{@const taskCount = projectTaskCounts[project.slug] ?? '…'}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div
@@ -181,13 +191,16 @@
 								<p class="text-xs text-zinc-400">
 									{taskCount} tasks ·
 									<span class="inline-flex items-center gap-0.5"
-										><span class="h-1.5 w-1.5 rounded-full bg-purple-400"></span>{counts.todo}</span
+										><span class="h-1.5 w-1.5 rounded-full bg-purple-400"></span>{counts?.todo ??
+											'…'}</span
 									>
 									<span class="inline-flex items-center gap-0.5"
-										><span class="h-1.5 w-1.5 rounded-full bg-sky-400"></span>{counts.doing}</span
+										><span class="h-1.5 w-1.5 rounded-full bg-sky-400"></span>{counts?.doing ??
+											'…'}</span
 									>
 									<span class="inline-flex items-center gap-0.5"
-										><span class="h-1.5 w-1.5 rounded-full bg-green-400"></span>{counts.done}</span
+										><span class="h-1.5 w-1.5 rounded-full bg-green-400"></span>{counts?.done ??
+											'…'}</span
 									>
 								</p>
 							</div>

@@ -4,8 +4,8 @@ import type { IProjectsService, ITaskService } from '../../services/interfaces';
 import type { Project } from '../../types/project';
 
 export function createProjectsState(projectsService: IProjectsService, taskService: ITaskService) {
-	const list = createResource({
-		projects: [] as Project[],
+	const list = createResource({ projects: [] as Project[] });
+	const summaries = createResource({
 		counts: {} as Record<string, { todo: number; doing: number; done: number }>,
 		taskCounts: {} as Record<string, number>
 	});
@@ -13,22 +13,27 @@ export function createProjectsState(projectsService: IProjectsService, taskServi
 	const state = {
 		list,
 		command,
-		load: () =>
-			list.load(async () => {
-				const projects = await projectsService.getAllProjects();
-				const summaries = await Promise.all(
-					projects.map(async (project) => {
-						const [counts, tasks] = await Promise.all([
-							projectsService.getProjectStatusCounts(project.slug),
-							taskService.getTaskCounts(project.slug)
-						]);
-						return { slug: project.slug, counts, tasks: tasks.total };
-					})
+		summaries,
+		load: () => {
+			summaries.reset();
+			return list.load(async () => ({ projects: await projectsService.getAllProjects() }));
+		},
+		loadSummaries: (projects: Project[]) =>
+			summaries.load(async () => {
+				const results = await Promise.all(
+					projects
+						.filter((project) => project.id !== 'project-canvas')
+						.map(async (project) => {
+							const [counts, tasks] = await Promise.all([
+								projectsService.getProjectStatusCounts(project.slug),
+								taskService.getTaskCounts(project.slug)
+							]);
+							return { slug: project.slug, counts, tasks: tasks.total };
+						})
 				);
 				return {
-					projects,
-					counts: Object.fromEntries(summaries.map((item) => [item.slug, item.counts])),
-					taskCounts: Object.fromEntries(summaries.map((item) => [item.slug, item.tasks]))
+					counts: Object.fromEntries(results.map((item) => [item.slug, item.counts])),
+					taskCounts: Object.fromEntries(results.map((item) => [item.slug, item.tasks]))
 				};
 			}),
 		async create(data: Parameters<IProjectsService['createProject']>[0]) {
@@ -44,6 +49,7 @@ export function createProjectsState(projectsService: IProjectsService, taskServi
 		dispose() {
 			command.dispose();
 			list.dispose();
+			summaries.dispose();
 		}
 	};
 	return state;
