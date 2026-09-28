@@ -4,7 +4,8 @@
 	import AsyncStatus from '../AsyncStatus.svelte';
 	import { getAppServices } from '$lib/app/context';
 	import ChoicePicker from '../inputs/ChoicePicker.svelte';
-	import { X } from '@lucide/svelte';
+	import PersonAvatar from '../PersonAvatar.svelte';
+	import { X, Check, LoaderCircle } from '@lucide/svelte';
 	import type { Task } from '../../types/task';
 
 	const { authStore, peopleService, taskService } = getAppServices();
@@ -87,103 +88,96 @@
 	aria-label={editorTitle}
 	class="nodrag nopan rounded-lg border border-zinc-200 bg-white p-4"
 >
-	<div class="mb-4 flex items-center justify-between">
-		<h2 class="text-lg font-semibold text-black">{editorTitle}</h2>
-		<button
-			onclick={onClose}
-			disabled={isLoading}
-			aria-label="Close task"
-			class="rounded-lg p-1 text-zinc-400 hover:bg-white hover:text-zinc-600"
-		>
-			<X class="h-5 w-5" />
-		</button>
-	</div>
-
-	<AsyncStatus state={$peopleResource} onRetry={() => void feature.loadPeople()} />
-	<AsyncStatus state={$command} pendingLabel="Saving…" />
 	<form onsubmit={handleSubmit} class="space-y-4">
-		<div>
-			<label for={`${inputId}-title`} class="mb-1 block text-sm font-medium text-zinc-600">
-				Task
-			</label>
-			<input
-				id={`${inputId}-title`}
-				type="text"
-				bind:value={title}
-				placeholder="What needs to be done?"
-				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black placeholder-zinc-500 focus:ring-2 focus:ring-borg-blue focus:outline-none"
-				disabled={isLoading}
-				required
-			/>
-		</div>
-
-		<div>
-			<span class="mb-1 block text-sm font-medium text-zinc-600">Assign to</span>
-			<ChoicePicker
-				label="Assign to"
-				bind:value={assignee}
-				disabled={isLoading}
-				options={[
-					{ value: '', label: 'Unassigned' },
-					...people.map((person) => ({
-						value: person.id,
-						label: person.name,
-						detail: person.email
-					}))
-				]}
-			/>
-		</div>
-
-		<div>
-			<label for={`${inputId}-dueDate`} class="mb-1 block text-sm font-medium text-zinc-600">
-				Due Date
-			</label>
-			<input
-				id={`${inputId}-dueDate`}
-				type="date"
-				bind:value={dueDate}
-				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black focus:ring-2 focus:ring-borg-blue focus:outline-none"
-				disabled={isLoading}
-			/>
-		</div>
-
-		<div>
-			<label for={`${inputId}-notes`} class="mb-1 block text-sm font-medium text-zinc-600">
-				Notes
-			</label>
-			<textarea
-				id={`${inputId}-notes`}
-				bind:value={notes}
-				rows="3"
-				placeholder="Additional notes..."
-				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black placeholder-zinc-500 focus:ring-2 focus:ring-borg-blue focus:outline-none"
-				disabled={isLoading}
-			></textarea>
-		</div>
-
-		<div class="flex gap-3 pt-4">
+		<div class="flex items-center justify-between gap-2">
+			<span class="font-sans text-xs font-semibold text-zinc-500">{editorTitle}</span>
 			<button
 				type="button"
 				onclick={onClose}
 				disabled={isLoading}
-				class="flex-1 rounded-lg bg-white px-4 py-2 text-black disabled:cursor-not-allowed disabled:opacity-60"
+				aria-label="Close task"
+				class="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+				><X class="h-4 w-4" /></button
 			>
-				Cancel
-			</button>
+		</div>
+		<input
+			id={`${inputId}-title`}
+			aria-label="Task"
+			type="text"
+			bind:value={title}
+			placeholder="What needs to be done?"
+			disabled={isLoading}
+			required
+			class="w-full border-0 bg-transparent font-sans text-xl font-semibold text-zinc-800 placeholder:text-zinc-300 focus:outline-none"
+		/>
+
+		<div class="flex flex-wrap items-start gap-4">
+			<div class="min-w-0 flex-[1_1_12rem] space-y-2">
+				<span class="block text-xs text-zinc-500">Assign to</span>
+				<ChoicePicker
+					label="Assign to"
+					bind:value={assignee}
+					disabled={isLoading}
+					options={[
+						{ value: '', label: 'Unassigned' },
+						...people.map((person) => ({
+							value: person.id,
+							label: person.name,
+							detail: person.email
+						}))
+					]}
+				>
+					{#snippet leading(id: string)}
+						{@const person = people.find((person) => person.id === id)}
+						{#if person}<PersonAvatar
+								name={person.name || 'Assignee'}
+								photoUrl={person.photoUrl}
+							/>{/if}
+					{/snippet}
+				</ChoicePicker>
+				<AsyncStatus state={$peopleResource} onRetry={() => void feature.loadPeople()} />
+			</div>
+			<div class="min-w-0 flex-[1_1_12rem] space-y-2">
+				<label for={`${inputId}-dueDate`} class="block text-xs text-zinc-500">Due date</label>
+				<input
+					id={`${inputId}-dueDate`}
+					type="date"
+					bind:value={dueDate}
+					disabled={isLoading}
+					class="w-full min-w-0 rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-xs text-zinc-700 focus:border-zinc-400 focus:outline-none"
+				/>
+			</div>
+		</div>
+		<div class="space-y-2">
+			<label for={`${inputId}-notes`} class="block text-xs text-zinc-500">Notes</label>
+			<textarea
+				id={`${inputId}-notes`}
+				bind:value={notes}
+				rows="3"
+				placeholder="Add a note…"
+				disabled={isLoading}
+				class="w-full resize-y rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-xs leading-5 text-zinc-800 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none"
+			></textarea>
+		</div>
+		{#if $command.error}<p role="alert" class="text-xs text-red-700">{$command.error}</p>{/if}
+		<div class="flex items-center gap-3">
 			<button
 				type="submit"
 				disabled={!title.trim() || isLoading}
-				class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-borg-orange px-4 py-2 text-white hover:bg-borg-orange disabled:cursor-not-allowed disabled:opacity-60"
+				class="flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-xs text-white hover:bg-zinc-700 disabled:opacity-40"
 			>
-				{#if isLoading}
-					<div
-						class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-					></div>
-					Saving...
-				{:else}
-					{submitButtonText}
-				{/if}
+				{#if isLoading}<LoaderCircle class="h-3.5 w-3.5 animate-spin" />{:else}<Check
+						class="h-3.5 w-3.5"
+					/>{/if}
+				{isLoading ? 'Saving…' : submitButtonText}
 			</button>
+			<button
+				type="button"
+				onclick={onClose}
+				disabled={isLoading}
+				class="rounded px-2 py-1.5 text-xs text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
+				>Cancel</button
+			>
 		</div>
 	</form>
 </section>

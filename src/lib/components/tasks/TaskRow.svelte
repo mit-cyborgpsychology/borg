@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Loader2, Trash2 } from '@lucide/svelte';
+	import PersonAvatar from '../PersonAvatar.svelte';
+	import { Loader2, Trash2, CalendarDays } from '@lucide/svelte';
 	import { SvelteDate } from 'svelte/reactivity';
 	import type { Task } from '$lib/types/task';
 	import { getAppServices } from '$lib/app/context';
@@ -9,6 +10,7 @@
 		pending = false,
 		disabled = false,
 		compact = false,
+		card = false,
 		onToggle,
 		onEdit,
 		onDelete
@@ -17,6 +19,7 @@
 		pending?: boolean;
 		disabled?: boolean;
 		compact?: boolean;
+		card?: boolean;
 		onToggle: () => void;
 		onEdit: () => void;
 		onDelete?: () => void;
@@ -33,10 +36,12 @@
 </script>
 
 <div
-	class="group/task nodrag nopan flex items-start gap-1 rounded py-0.5 hover:bg-zinc-100/60"
+	class="group/task nodrag nopan flex items-start gap-1 rounded py-0.5 {card
+		? ''
+		: 'hover:bg-zinc-100/60'}"
 	aria-busy={pending}
 >
-	<div class="relative flex h-7 w-7 shrink-0 items-center justify-center">
+	<div class="relative flex h-7 w-7 shrink-0 items-center justify-center {card ? 'z-10' : ''}">
 		<input
 			type="checkbox"
 			checked={done}
@@ -62,18 +67,39 @@
 			{disabled}
 			aria-label={`Edit ${task.title}`}
 			title={task.title}
-			class="block w-full rounded text-left text-xs leading-5 text-zinc-800 focus-visible:outline-2 focus-visible:outline-zinc-400 {compact
-				? 'truncate'
-				: 'break-words'} {done ? 'text-zinc-400 line-through' : ''}">{task.title}</button
+			class="block w-full rounded text-left font-sans leading-5 font-semibold text-zinc-800 focus-visible:outline-2 focus-visible:outline-zinc-400 {compact
+				? 'truncate text-xs'
+				: 'text-sm break-words'} {card ? 'card-title' : ''} {done
+				? 'text-zinc-400 line-through'
+				: ''}">{task.title}</button
 		>
-		{#if !compact && (person || date)}
-			<div class="flex items-center gap-x-2 text-[11px] text-zinc-400">
-				{#if person}<span class="truncate" title={person.name}
-						>{task.assignee === $authStore.user?.uid ? 'You' : person.name?.split(' ')[0]}</span
-					>{/if}
-				{#if date}<span class="shrink-0" class:text-red-600={overdue} title={task.dueDate}
-						>{date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span
-					>{/if}
+		{#if !compact && ((!card && person) || date)}
+			<div
+				class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-zinc-500 {card
+					? 'mt-2'
+					: 'mt-1.5'}"
+			>
+				{#if person && !card}
+					<span class="inline-flex max-w-full min-w-0 items-center gap-1.5" title={person.name}>
+						<PersonAvatar name={person.name || 'Assignee'} photoUrl={person.photoUrl} />
+						<span class="truncate"
+							>{task.assignee === $authStore.user?.uid ? 'You' : person.name}</span
+						>
+					</span>
+				{/if}
+				{#if date}
+					<span
+						class="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 {overdue
+							? 'bg-rose-50 text-rose-600'
+							: 'bg-zinc-50 text-zinc-500'}"
+						title={task.dueDate}
+					>
+						<CalendarDays class="h-3 w-3" />{date.toLocaleDateString(undefined, {
+							month: 'short',
+							day: 'numeric'
+						})}
+					</span>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -83,8 +109,34 @@
 			onclick={onDelete}
 			{disabled}
 			aria-label={`Delete ${task.title}`}
-			class="mt-1 rounded p-1 text-zinc-400 opacity-0 group-focus-within/task:opacity-100 group-hover/task:opacity-100 hover:text-red-600 focus-visible:opacity-100"
+			class="{card
+				? 'relative z-10'
+				: ''} mt-1 rounded p-1 text-zinc-400 opacity-0 group-focus-within/task:opacity-100 group-hover/task:opacity-100 hover:text-red-600 focus-visible:opacity-100"
 			><Trash2 class="h-3 w-3" /></button
 		>
 	{/if}
 </div>
+
+<style>
+	/* Extend the title's native button hit area to the containing card. */
+	.card-title::after {
+		position: absolute;
+		inset: 0;
+		border-radius: 0.5rem;
+		content: '';
+		cursor: pointer;
+	}
+
+	.card-title:focus-visible {
+		outline: none;
+	}
+
+	.card-title:focus-visible::after {
+		outline: 2px solid var(--color-zinc-400);
+		outline-offset: 2px;
+	}
+
+	.card-title:disabled::after {
+		cursor: wait;
+	}
+</style>

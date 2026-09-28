@@ -9,7 +9,12 @@
 	import type { TemplateField } from '../../templates';
 	import TimelineEventEditor from '../browser/TimelineEventEditor.svelte';
 	import { Plus, CalendarDays, Flag, Banknote, Presentation } from '@lucide/svelte';
-	const typeIcons = { event: CalendarDays, deadline: Flag, grant: Banknote, conference: Presentation };
+	const typeIcons = {
+		event: CalendarDays,
+		deadline: Flag,
+		grant: Banknote,
+		conference: Presentation
+	};
 	import { getTimelineTemplate } from '$lib/types/timeline';
 
 	const { createTimelineService } = getAppServices();
@@ -221,7 +226,10 @@
 					{@const event = eventsMap.get(id)}
 					{#if event}
 						{@const Icon = typeIcons[event.templateType as keyof typeof typeIcons] || CalendarDays}
-						<Icon class="h-4 w-4 shrink-0" style="color: {getTimelineTemplate(event.templateType).color}" />
+						<Icon
+							class="h-4 w-4 shrink-0"
+							style="color: {getTimelineTemplate(event.templateType).color}"
+						/>
 					{/if}
 				{/snippet}
 				<label

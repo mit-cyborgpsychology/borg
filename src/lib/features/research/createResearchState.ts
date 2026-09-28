@@ -1,8 +1,14 @@
 import { createResource } from '../../state/resource.ts';
 import type { IResearchService } from '../../services/interfaces/IResearchService';
-import type { ResearchPaper, ResearchMap, PaperSubmission } from '../../types/research';
+import type {
+	ResearchPaper,
+	ResearchMap,
+	PaperSubmission,
+	ResearchStatus
+} from '../../types/research';
 
 export function createResearchState(service: IResearchService) {
+	const status = createResource<ResearchStatus | null>(null);
 	const papers = createResource<ResearchPaper[]>([]);
 	const map = createResource<ResearchMap | null>(null);
 	const submission = createResource<PaperSubmission | null>(null);
@@ -31,6 +37,8 @@ export function createResearchState(service: IResearchService) {
 		if (id) await track(await submission.load(() => service.getSubmission(id)), expectedGeneration);
 	}
 	return {
+		status,
+		checkStatus: () => status.load(() => service.getStatus()),
 		papers,
 		map,
 		submission,
@@ -48,6 +56,7 @@ export function createResearchState(service: IResearchService) {
 			disposed = true;
 			clearTimeout(timer);
 			clearTimeout(mapTimer);
+			status.dispose();
 			submission.dispose();
 			papers.dispose();
 			map.dispose();

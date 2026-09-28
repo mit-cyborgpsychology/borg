@@ -139,3 +139,18 @@ on macOS; otherwise run `pnpm exec playwright install chromium` first or provide
 `demo-borg`, blocks external traffic, and verifies rejected writes, form retry,
 authenticated tabs, canvas creation, and persistence after reload. It never clears
 existing emulator data. Outline and production presence are outside this local test.
+
+### References status monitor
+
+Open **References → Status** to check Grist, the saved map, Chroma, the ingestion
+server, the WhatsApp process and the web submission queue. Checks run every 30
+seconds while the panel is open and the page is visible, or on **Check now**.
+The panel shows the last check time, map update time, and your latest 20 web
+submissions. WhatsApp health indicates process liveness, not connection status.
+No monitor check triggers paper fetching, map computation or clustering.
+
+The authenticated `/api/research/status` endpoint uses the existing research and
+submission environment variables. Deploy the updated `deploy/paper-submit/handler.mjs`
+to enable the queue/history check. Missing configuration is shown separately from
+an unavailable service. Run `BORG_TEST_URL=http://127.0.0.1:5182 node tests/browser/research-monitor.mjs`
+against a demo Firebase development server for the browser integration check.

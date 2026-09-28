@@ -195,3 +195,23 @@ test('a stale status request cannot replace a newer submission', async () => {
 	assert.deepEqual(requested, ['old', 'new']);
 	state.dispose();
 });
+
+test('monitor requires authentication and returns only the verified owner history', async (t) => {
+	const request = await fixture(t, async () => ({ status: 'saved', message: 'Saved.' }));
+	const a = await (await request({ owner: 'a', url: 'https://example.com/a' })).json();
+	await completed(request, 'a', a.id);
+	const b = await (await request({ owner: 'b', url: 'https://example.com/b' })).json();
+	await completed(request, 'b', b.id);
+	assert.equal((await request({ owner: 'a', action: 'monitor' }, 'wrong')).status, 401);
+	const response = await request({ owner: 'a', action: 'monitor' });
+	assert.equal(response.status, 200);
+	const data = await response.json();
+	assert.deepEqual(
+		data.submissions.map((j) => j.id),
+		[a.id]
+	);
+	assert.equal(data.queued, 0);
+	assert.equal(data.processing, 0);
+	assert.ok(!JSON.stringify(data).includes('"owner"'));
+	assert.equal((await request({ action: 'monitor' })).status, 400);
+});

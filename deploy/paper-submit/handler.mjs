@@ -126,6 +126,19 @@ export function createPaperSubmissionHandler(
 				send(res, 400, { message: 'Invalid account' });
 				return;
 			}
+			if (input.action === 'monitor') {
+				const all = [...jobs.values()];
+				send(res, 200, {
+					queued: all.filter((j) => j.status === 'queued').length,
+					processing: all.filter((j) => j.status === 'processing').length,
+					submissions: all
+						.filter((j) => j.owner === input.owner)
+						.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+						.slice(0, 20)
+						.map(publicJob)
+				});
+				return;
+			}
 			if (input.action === 'status') {
 				const job = jobs.get(input.id);
 				if (!job || job.owner !== input.owner) {

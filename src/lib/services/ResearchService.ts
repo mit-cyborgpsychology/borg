@@ -1,6 +1,11 @@
 import type { IResearchService } from './interfaces/IResearchService';
 import type { ReadSession } from './interfaces/Session';
-import type { ResearchPaper, ResearchMap, PaperSubmission } from '../types/research';
+import type {
+	ResearchPaper,
+	ResearchMap,
+	PaperSubmission,
+	ResearchStatus
+} from '../types/research';
 
 export class ResearchService implements IResearchService {
 	private readSession: ReadSession;
@@ -8,6 +13,17 @@ export class ResearchService implements IResearchService {
 		this.readSession = readSession;
 	}
 
+	async getStatus(): Promise<ResearchStatus> {
+		const user = this.readSession().user;
+		if (!user) throw new Error('Sign in to view service status.');
+		const response = await fetch('/api/research/status', {
+			headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+			signal: AbortSignal.timeout(35_000)
+		});
+		if (!response.ok)
+			throw new Error('Unable to check status. Check your connection and try again.');
+		return response.json();
+	}
 	async listPapers(): Promise<ResearchPaper[]> {
 		const user = this.readSession().user;
 		if (!user) throw new Error('Sign in to view research.');

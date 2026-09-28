@@ -38,3 +38,19 @@ request restrictions.
 Testing uses mocked pipeline results and temporary job directories. The browser
 suite exercises a real duplicate submission (no new library record), then mocks
 new-paper success and failure states. It never inserts arbitrary test papers.
+
+The authenticated `{owner,action:"monitor"}` request returns queue counts and the
+owner's latest 20 submissions, including completed jobs. Borg's References → Status
+panel checks this alongside Grist, the saved map and the existing `/health` endpoint.
+It checks every 30 seconds only while open and the page is visible; checks do not
+trigger ingestion, map computation or clustering. WhatsApp health reports process
+liveness, not an authenticated WhatsApp connection. The monitor requires the same
+`RESEARCH_INGEST_URL` and `RESEARCH_INGEST_TOKEN` bindings as paper submission.
+
+WhatsApp sends the summary after the Grist save attempt and before Chroma
+embedding, map triggering, and optional Outline archival. Map computation remains
+a detached Python process. To update an already-installed server, copy
+`reply_before_indexing.py` into `paper-submit/` and run
+`python3 paper-submit/reply_before_indexing.py` from the ingestion app root, then
+restart the server. The installer also applies this change on fresh or existing
+installations. Web submission status continues to wait for its indexing attempt.

@@ -9,7 +9,27 @@ export interface TaskSourceOptions {
 	outlineDocTitle?: string;
 }
 
+export interface TaskPageCursor {
+	createdAt: string;
+	id: string;
+}
+
+export interface TaskPageOptions {
+	status: 'active' | 'resolved';
+	assignee?: string;
+	project?: string;
+	cursor?: TaskPageCursor | null;
+	pageSize?: number;
+}
+
+export interface TaskPage {
+	tasks: TaskWithContext[];
+	nextCursor: TaskPageCursor | null;
+}
+
 export interface ITaskService {
+	getTaskPage(options: TaskPageOptions): Promise<TaskPage>;
+	getTaskProjectCount(project: string, assignee?: string): Promise<number>;
 	getAllTasks(): Promise<TaskWithContext[]>;
 	getProjectTasks(projectSlug: string): Promise<TaskWithContext[]>;
 	getPersonTasks(personId: string): Promise<TaskWithContext[]>;

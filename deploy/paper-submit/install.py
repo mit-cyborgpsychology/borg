@@ -3,11 +3,13 @@ from pathlib import Path
 import datetime
 import shutil
 import subprocess
+from reply_before_indexing import reorder, update_server
 
 root=Path.cwd()
 server=root/'server.mjs'
 s=server.read_text()
 if './paper-submit/handler.mjs' in s:
+    update_server(server)
     print('Web paper submission integration is already installed')
     raise SystemExit(0)
 
@@ -74,6 +76,7 @@ export async function ensureReferenceEmbedding(paper) {
   if (!found.ids.length) await addReferenceEmbedding(paper);
 }
 '''
+s=reorder(s)
 changes={'server.mjs':s,'fetch-link.mjs':f,'chroma.mjs':c}
 node=shutil.which('node') or str(Path.home()/'.local/share/mise/shims/node')
 for value in changes.values():

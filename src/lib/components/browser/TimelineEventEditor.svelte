@@ -112,7 +112,7 @@
 			><Plus class="h-3 w-3" />Details</button
 		>
 		{#if details}
-			<div class="space-y-4 border-t border-zinc-100 pt-4">
+			<div class="event-details space-y-4">
 				{#each template.fields.filter((field) => !['title', 'timestamp'].includes(field.id)) as field (field.id)}
 					<FieldRenderer {field} bind:value={data[field.id]} readonly={busy} mode="edit" />
 				{/each}
@@ -133,3 +133,44 @@
 		>
 	</form>
 </section>
+
+<style>
+	.event-details :global(.field-container > label),
+	.event-details :global(.field-container > span:first-child) {
+		margin-bottom: 0.5rem;
+		font-size: 0.75rem;
+		line-height: 1rem;
+		font-weight: 400;
+		color: var(--color-zinc-500);
+	}
+
+	.event-details :global(input),
+	.event-details :global(textarea) {
+		border-color: var(--color-zinc-200);
+		border-radius: 0.375rem;
+		padding: 0.5rem 0.625rem;
+		font-family: inherit;
+		font-size: 0.75rem;
+		line-height: 1.25rem;
+		color: var(--color-zinc-800);
+	}
+
+	.event-details :global(input:focus),
+	.event-details :global(textarea:focus) {
+		border-color: var(--color-zinc-400);
+	}
+
+	.event-details :global(button) {
+		border-color: var(--color-zinc-200);
+	}
+
+	.event-details :global(button:hover) {
+		background-color: var(--color-zinc-100);
+		color: var(--color-zinc-800);
+	}
+
+	.event-details :global(span.inline-flex) {
+		background-color: var(--color-zinc-100);
+		color: var(--color-zinc-700);
+	}
+</style>

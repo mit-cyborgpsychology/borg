@@ -42,3 +42,16 @@ export interface PaperSubmission {
 	title: string;
 	updatedAt: string;
 }
+
+export interface ResearchHealthCheck {
+	updatedAt?: string;
+	id: string;
+	name: string;
+	status: 'ok' | 'error' | 'unconfigured';
+	message: string;
+}
+export interface ResearchStatus {
+	checkedAt: string;
+	checks: ResearchHealthCheck[];
+	submissions: PaperSubmission[];
+}

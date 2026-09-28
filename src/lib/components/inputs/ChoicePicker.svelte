@@ -101,7 +101,8 @@
 		class="flex w-full items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-borg-blue disabled:opacity-50"
 	>
 		{#if selected}{@render leading?.(selected.value)}{/if}
-		<span id={`${id}-selected`} class="min-w-0 flex-1 truncate">{selected?.label ?? (value || placeholder)}</span
+		<span id={`${id}-selected`} class="min-w-0 flex-1 truncate"
+			>{selected?.label ?? (value || placeholder)}</span
 		><ChevronDown class="h-3.5 w-3.5 shrink-0" />
 	</button>
 	{#if open && !disabled}

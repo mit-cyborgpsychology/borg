@@ -14,42 +14,37 @@ export class OutlineService implements IOutlineService {
 		return { Authorization: `Bearer ${await user.getIdToken()}` };
 	}
 
-	async createDoc(projectSlug: string, title: string): Promise<OutlineDoc> {
+	private async nodeRequest(
+		projectSlug: string,
+		nodeId: string,
+		action: string,
+		documentId?: string
+	) {
 		const headers = await this.authHeader();
-
 		const project = await this.projectsService.getProject(projectSlug);
-		if (!project) {
-			throw new Error(`Project not found: ${projectSlug}`);
-		}
-
-		const res = await fetch('/api/outline/docs', {
+		if (!project) throw new Error('Project not found.');
+		const response = await fetch('/api/outline/docs', {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
-			},
-			body: JSON.stringify({
-				projectSlug,
-				projectTitle: project.title,
-				existingCollectionId: project.outlineCollectionId,
-				title
-			})
+			headers: { 'Content-Type': 'application/json', ...headers },
+			body: JSON.stringify({ projectId: project.id, nodeId, action, documentId }),
+			signal: AbortSignal.timeout(100_000)
 		});
-
-		if (!res.ok) {
-			throw new Error(`Failed to create Outline doc: ${await res.text()}`);
-		}
-
-		const result: OutlineDoc & { collectionId: string } = await res.json();
-
-		// Persist the collection id on the project the first time it's created
-		if (!project.outlineCollectionId && result.collectionId) {
-			await this.projectsService.updateProject(projectSlug, {
-				outlineCollectionId: result.collectionId
-			});
-		}
-
-		return { id: result.id, url: result.url, title: result.title };
+		const result = await response.json().catch(() => null);
+		if (!response.ok)
+			throw new Error(result?.message || 'Unable to connect to Outline. Please retry.');
+		return result;
+	}
+	async createDoc(projectSlug: string, nodeId: string): Promise<OutlineDoc> {
+		return this.nodeRequest(projectSlug, nodeId, 'create');
+	}
+	async getNodeDoc(projectSlug: string, nodeId: string): Promise<OutlineDoc> {
+		return this.nodeRequest(projectSlug, nodeId, 'read');
+	}
+	async linkDoc(projectSlug: string, nodeId: string, documentId: string): Promise<OutlineDoc> {
+		return this.nodeRequest(projectSlug, nodeId, 'link', documentId);
+	}
+	async listProjectDocs(projectSlug: string, nodeId: string): Promise<OutlineDocSummary[]> {
+		return (await this.nodeRequest(projectSlug, nodeId, 'list')).docs;
 	}
 
 	async searchDocs(query: string): Promise<OutlineDocSummary[]> {

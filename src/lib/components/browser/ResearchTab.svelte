@@ -1,6 +1,15 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
-	import { Search, RefreshCw, ArrowUpRight, FileText, X, Network, Plus } from '@lucide/svelte';
+	import {
+		Search,
+		RefreshCw,
+		ArrowUpRight,
+		FileText,
+		X,
+		Network,
+		Plus,
+		Activity
+	} from '@lucide/svelte';
 	import { SvelteFlowProvider } from '@xyflow/svelte';
 	import { getAppServices } from '$lib/app/context';
 	import { createResearchState } from '$lib/features/research/createResearchState';
@@ -10,8 +19,10 @@
 		type ResearchSort
 	} from '$lib/features/research/filterResearch';
 	import ResearchMap from '../research/ResearchMap.svelte';
-	import AddPaperDialog from '../research/AddPaperDialog.svelte';
-	let addDialog: { open: () => void };
+	import ResearchMonitor from '../research/ResearchMonitor.svelte';
+	let monitorOpen = $state(false);
+	import PaperComposer from '../research/PaperComposer.svelte';
+	let paperComposer: { open: () => Promise<void>; close: () => void };
 
 	const { researchService } = getAppServices();
 	const feature = createResearchState(researchService);
@@ -79,7 +90,7 @@
 	class="flex h-full min-h-0 flex-col overflow-hidden bg-white"
 >
 	<header
-		class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2.5"
+		class="relative z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2.5"
 	>
 		<div class="flex items-center gap-2">
 			<Network class="h-4 w-4 text-zinc-500" />
@@ -92,7 +103,10 @@
 		<div class="flex items-center gap-2">
 			<button
 				type="button"
-				onclick={() => addDialog.open()}
+				onclick={() => {
+					monitorOpen = false;
+					void paperComposer.open();
+				}}
 				class="flex items-center gap-1.5 rounded bg-zinc-800 px-2 py-1 text-xs text-white hover:bg-zinc-700"
 				><Plus class="h-3 w-3" />Add paper</button
 			>
@@ -105,6 +119,25 @@
 			>
 				<RefreshCw class="h-3 w-3 {loading || mapLoading ? 'animate-spin' : ''}" />Refresh
 			</button>
+			<button
+				type="button"
+				aria-expanded={monitorOpen}
+				aria-controls="references-monitor"
+				onclick={() => {
+					paperComposer.close();
+					monitorOpen = !monitorOpen;
+				}}
+				class="flex items-center gap-1.5 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50"
+				><Activity class="h-3 w-3" />Status</button
+			>
+		</div>
+		{#if monitorOpen}
+			<div class="absolute inset-x-0 top-full">
+				<ResearchMonitor {feature} />
+			</div>
+		{/if}
+		<div class="absolute inset-x-0 top-full">
+			<PaperComposer bind:this={paperComposer} {feature} />
 		</div>
 	</header>
 	<div class="flex min-h-0 flex-1 flex-col md:flex-row">
@@ -339,5 +372,3 @@
 		</aside>
 	</div>
 </section>
-
-<AddPaperDialog bind:this={addDialog} {feature} />

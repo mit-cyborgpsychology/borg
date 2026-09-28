@@ -1,6 +1,16 @@
 // Thin wrapper around Outline's REST API. Used by both the doc-creation route
 // and (later) the comment-webhook bridge — one place that talks to Outline.
 
+export class OutlineApiError extends Error {
+	status: number;
+	endpoint: string;
+	constructor(status: number, publicEndpoint = '') {
+		super(`Outline request failed (${status}).`);
+		this.status = status;
+		this.endpoint = publicEndpoint;
+	}
+}
+
 export interface OutlineConfig {
 	apiUrl: string;
 	apiToken: string;
@@ -22,26 +32,36 @@ function toAbsoluteUrl(config: OutlineConfig, maybeRelativeUrl: string): string 
 	return `${apiBase(config.apiUrl)}${maybeRelativeUrl.startsWith('/') ? '' : '/'}${maybeRelativeUrl}`;
 }
 
-async function outlineFetch(config: OutlineConfig, endpoint: string, body: Record<string, unknown>) {
+async function outlineFetch(
+	config: OutlineConfig,
+	endpoint: string,
+	body: Record<string, unknown>
+) {
 	const res = await fetch(`${apiBase(config.apiUrl)}/api/${endpoint}`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${config.apiToken}`
 		},
-		body: JSON.stringify(body)
+		body: JSON.stringify(body),
+		redirect: 'manual',
+		signal: AbortSignal.timeout(15_000)
 	});
 
 	if (!res.ok) {
-		const text = await res.text();
-		throw new Error(`Outline API ${endpoint} failed (${res.status}): ${text}`);
+		throw new OutlineApiError(res.status, endpoint);
 	}
 
 	return res.json();
 }
 
-export async function createCollection(config: OutlineConfig, name: string) {
-	const json = await outlineFetch(config, 'collections.create', { name });
+export async function createCollection(config: OutlineConfig, name: string, description?: string) {
+	const json = await outlineFetch(config, 'collections.create', {
+		name,
+		description,
+		permission: 'read_write',
+		sharing: false
+	});
 	return json.data as { id: string; name: string };
 }
 
@@ -49,16 +69,18 @@ export async function getCollection(config: OutlineConfig, id: string) {
 	try {
 		const json = await outlineFetch(config, 'collections.info', { id });
 		return json.data as { id: string; name: string };
-	} catch {
-		return null;
+	} catch (error) {
+		if (error instanceof OutlineApiError && error.status === 404) return null;
+		throw error;
 	}
 }
 
 export async function createDocument(
 	config: OutlineConfig,
-	params: { title: string; collectionId: string; text?: string }
+	params: { id?: string; title: string; collectionId: string; text?: string }
 ) {
 	const json = await outlineFetch(config, 'documents.create', {
+		...(params.id ? { id: params.id } : {}),
 		title: params.title,
 		collectionId: params.collectionId,
 		text: params.text ?? '',
@@ -70,7 +92,15 @@ export async function createDocument(
 
 export async function getDocument(config: OutlineConfig, id: string) {
 	const json = await outlineFetch(config, 'documents.info', { id });
-	const doc = json.data as { id: string; url: string; title: string; collectionId?: string };
+	const doc = json.data as {
+		id: string;
+		url: string;
+		title: string;
+		collectionId?: string;
+		updatedAt?: string;
+		deletedAt?: string;
+		archivedAt?: string;
+	};
 	return { ...doc, url: toAbsoluteUrl(config, doc.url) };
 }
 
@@ -82,7 +112,7 @@ export interface OutlineDocSummary {
 	collectionId: string;
 }
 
-function toDocSummary(config: OutlineConfig, doc: any): OutlineDocSummary {
+function toDocSummary(config: OutlineConfig, doc: OutlineDocSummary): OutlineDocSummary {
 	return {
 		id: doc.id,
 		title: doc.title,
@@ -94,7 +124,7 @@ function toDocSummary(config: OutlineConfig, doc: any): OutlineDocSummary {
 
 export async function searchDocuments(config: OutlineConfig, query: string) {
 	const json = await outlineFetch(config, 'documents.search', { query });
-	const results = json.data as Array<{ document: any }>;
+	const results = json.data as Array<{ document: OutlineDocSummary }>;
 	return results.map((r) => toDocSummary(config, r.document));
 }
 
@@ -104,7 +134,7 @@ export async function listDocuments(config: OutlineConfig, collectionId: string)
 		sort: 'updatedAt',
 		direction: 'DESC'
 	});
-	const results = json.data as any[];
+	const results = json.data as OutlineDocSummary[];
 	return results.map((doc) => toDocSummary(config, doc));
 }
 
@@ -118,4 +148,14 @@ export async function createComment(
 		...(params.parentCommentId && { parentCommentId: params.parentCommentId })
 	});
 	return json.data as { id: string };
+}
+
+export async function findProjectCollection(config: OutlineConfig, marker: string) {
+	for (let offset = 0; ; offset += 100) {
+		const result = await outlineFetch(config, 'collections.list', { limit: 100, offset });
+		const rows = result.data as Array<{ id: string; description?: string }>;
+		const match = rows.find((row) => row.description?.includes(marker));
+		if (match) return match;
+		if (rows.length < 100) return null;
+	}
 }

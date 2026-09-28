@@ -3,10 +3,14 @@ import {
 	setDoc,
 	deleteDoc,
 	getDocs,
+	getCountFromServer,
 	getDoc,
 	query,
 	where,
 	orderBy,
+	documentId,
+	startAfter,
+	limit,
 	onSnapshot,
 	updateDoc,
 	doc,
@@ -22,6 +26,7 @@ import type {
 	TaskSourceType
 } from '../../types/task';
 import type { ITaskService, TaskSourceOptions } from '../interfaces';
+import type { TaskPageOptions, TaskPage } from '../interfaces/ITaskService';
 
 export interface StoredTask {
 	id: string;
@@ -86,6 +91,52 @@ export class FirebaseTaskService implements ITaskService {
 		private db: Firestore,
 		private readSession: ReadSession
 	) {}
+	private projectConstraints(project?: string) {
+		if (project?.startsWith('project:')) return [where('projectSlug', '==', project.slice(8))];
+		if (project === 'source:outline') return [where('sourceType', '==', 'outline')];
+		if (project === 'source:unlinked')
+			return [where('projectSlug', '==', ''), where('sourceType', '==', 'project')];
+		return [];
+	}
+
+	async getTaskProjectCount(project: string, assignee?: string): Promise<number> {
+		const snapshot = await getCountFromServer(
+			query(
+				collection(this.db, 'tasks'),
+				...this.projectConstraints(project),
+				...(assignee ? [where('assignee', '==', assignee)] : [])
+			)
+		);
+		return snapshot.data().count;
+	}
+
+	async getTaskPage(options: TaskPageOptions): Promise<TaskPage> {
+		const pageSize = Math.max(1, Math.min(100, options.pageSize ?? 24));
+		const snapshot = await getDocs(
+			query(
+				collection(this.db, 'tasks'),
+				options.status === 'active'
+					? where('status', 'in', ['active', null])
+					: where('status', '==', 'resolved'),
+				...(options.assignee ? [where('assignee', '==', options.assignee)] : []),
+				...this.projectConstraints(options.project),
+				orderBy('createdAt', 'desc'),
+				orderBy(documentId(), 'desc'),
+				...(options.cursor ? [startAfter(options.cursor.createdAt, options.cursor.id)] : []),
+				limit(pageSize + 1)
+			)
+		);
+		const documents = snapshot.docs.slice(0, pageSize);
+		const last = documents.at(-1);
+		return {
+			tasks: documents.map((document) =>
+				this.toTaskWithContext({ ...document.data(), id: document.id } as StoredTask)
+			),
+			nextCursor:
+				snapshot.size > pageSize && last ? { createdAt: last.data().createdAt, id: last.id } : null
+		};
+	}
+
 	async getAllTasks(): Promise<TaskWithContext[]> {
 		const q = query(
 			collection(this.db, 'tasks'),
