@@ -1,4 +1,4 @@
-import { get } from 'svelte/store';
+import { derived, get } from 'svelte/store';
 import { createResource } from '../../state/resource.ts';
 import type { ITaskService, IProjectsService } from '../../services/interfaces';
 import type { TaskPageCursor } from '../../services/interfaces/ITaskService';
@@ -32,24 +32,35 @@ export function createTaskPages(
 		pageNumbers: { active: 1, completed: 1 },
 		starts: { active: [null], completed: [null] }
 	};
-	const list = createResource(initial);
+	const pages = createResource(initial);
+	const directory = createResource<TaskProjectEntry[]>([]);
+	const combined = derived([pages, directory], ([$pages, $directory]) => ({
+		...$pages,
+		data: { ...$pages.data, projects: $directory.data }
+	}));
+	const list = { ...pages, subscribe: combined.subscribe };
 	let assignee: string | undefined;
 	let visible: (task: TaskWithContext) => boolean = () => true;
 	let generation = 0;
-	let allowExternal = true;
-	async function loadDirectory(personId?: string): Promise<TaskProjectEntry[]> {
+
+	async function loadDirectory(
+		personId: string | undefined,
+		request: number,
+		includeExternal: boolean
+	): Promise<TaskProjectEntry[]> {
 		const all = await projects.getAllProjects();
 		const entries = all.map((project) => ({
 			value: `project:${project.slug}`,
 			label: project.title
 		}));
-		if (allowExternal)
+		if (includeExternal)
 			entries.push(
 				{ value: 'source:outline', label: 'Outline' },
 				{ value: 'source:unlinked', label: 'Unlinked project' }
 			);
 		const results: TaskProjectEntry[] = [];
 		for (let offset = 0; offset < entries.length; offset += 8) {
+			if (request !== generation) return [];
 			results.push(
 				...(await Promise.all(
 					entries.slice(offset, offset + 8).map(async (entry) => ({
@@ -82,6 +93,7 @@ export function createTaskPages(
 
 	return {
 		list,
+		directory,
 		load(
 			personId?: string,
 			prepareFilter: () => Promise<(task: TaskWithContext) => boolean> = async () => () => true,
@@ -89,12 +101,14 @@ export function createTaskPages(
 		) {
 			const current = assignee === personId ? get(list).data : initial;
 			assignee = personId;
-			allowExternal = includeExternal;
 			const request = ++generation;
+			directory.reset();
 			return list.load(async () => {
 				const filter = await prepareFilter();
-				if (request === generation) visible = filter;
-				const [active, resolved, directory] = await Promise.all([
+				if (request !== generation) return current;
+				visible = filter;
+				void directory.load(() => loadDirectory(personId, request, includeExternal));
+				const [active, resolved] = await Promise.all([
 					fetchPage(
 						'active',
 						current.starts.active[current.pageNumbers.active - 1],
@@ -108,12 +122,10 @@ export function createTaskPages(
 						personId,
 						filter,
 						current.selectedProject
-					),
-					loadDirectory(personId)
+					)
 				]);
 				return {
 					...current,
-					projects: directory,
 					active: active.items,
 					resolved: resolved.items,
 					cursors: { active: active.cursor, completed: resolved.cursor }
@@ -163,6 +175,7 @@ export function createTaskPages(
 		dispose() {
 			generation++;
 			list.dispose();
+			directory.dispose();
 		}
 	};
 }

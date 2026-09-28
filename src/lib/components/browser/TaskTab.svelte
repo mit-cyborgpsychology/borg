@@ -9,6 +9,7 @@
 	const { taskService, authStore, projectsService, taskContext } = getAppServices();
 	const feature = createTasksState(taskService, projectsService, taskContext.joinTaskContext);
 	const resource = feature.list;
+	const directory = feature.directory;
 	onDestroy(() => feature.dispose());
 	$effect(() => {
 		if (activeTab === 'tasks' && $resource.status === 'idle') void load();
@@ -18,7 +19,13 @@
 	}
 </script>
 
-<StatusOverlay><AsyncStatus state={$resource} onRetry={() => void load()} /></StatusOverlay>
+<StatusOverlay>
+	{#if $directory.status === 'error'}<AsyncStatus
+			state={$directory}
+			onRetry={() => void load()}
+		/>{/if}
+	<AsyncStatus state={$resource} onRetry={() => void load()} /></StatusOverlay
+>
 <div class="h-full min-h-0 overflow-auto p-4 md:overflow-hidden">
 	<div class="mx-auto w-full max-w-6xl md:h-full">
 		<TaskWorkspace

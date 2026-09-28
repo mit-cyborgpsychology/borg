@@ -1,4 +1,4 @@
-import { createTaskPages } from './createTaskPages';
+import { createTaskPages } from './createTaskPages.ts';
 import type { ITaskService, IProjectsService } from '../../services/interfaces';
 import type { TaskWithContext } from '../../types/task';
 
@@ -10,6 +10,7 @@ export function createTasksState(
 	const pages = createTaskPages(tasks, join, projects);
 	return {
 		list: pages.list,
+		directory: pages.directory,
 		load(collaborator: boolean) {
 			return pages.load(
 				undefined,

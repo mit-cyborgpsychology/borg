@@ -1,4 +1,4 @@
-import { createTaskPages } from '../tasks/createTaskPages';
+import { createTaskPages } from '../tasks/createTaskPages.ts';
 import { createCommand } from '../../state/command.ts';
 import { createResource } from '../../state/resource.ts';
 import type { IProfileService, Profile } from '../../services/interfaces/IProfileService';
@@ -19,6 +19,7 @@ export function createProfileState(
 		profile,
 		command,
 		assigned,
+		directory: pages.directory,
 		loadProfile: (userId: string) => profile.load(() => profiles.getProfile(userId)),
 		loadTasks: (userId: string) => pages.load(userId),
 		changePage: pages.changePage,
@@ -31,7 +32,7 @@ export function createProfileState(
 		dispose() {
 			command.dispose();
 			profile.dispose();
-			assigned.dispose();
+			pages.dispose();
 		}
 	};
 	return state;

@@ -1,5 +1,5 @@
 import type { IProjectsService } from './interfaces/IProjectsService';
-import { extractNodeTitle } from '../utils/nodeTitle';
+import { extractNodeTitle } from '../utils/nodeTitle.ts';
 import type { TaskWithContext } from '../types/task';
 
 // Cross-project live-join layer for task display fields (project/node title,
@@ -25,7 +25,29 @@ export function createTaskContext(
 	const projectTitleById = new Map<string, string>();
 	const nodeTitleByKey = new Map<string, string>(); // `${projectId}:${nodeId}` -> title
 
-	async function resolveProjectId(projectSlug: string): Promise<string | null> {
+	const pendingProjects = new Map<string, Promise<string | null>>();
+	const pendingNodes = new Map<string, Promise<string | null>>();
+	function shared(
+		pending: Map<string, Promise<string | null>>,
+		key: string,
+		load: () => Promise<string | null>
+	) {
+		const existing = pending.get(key);
+		if (existing) return existing;
+		const request = load().finally(() => {
+			if (pending.get(key) === request) pending.delete(key);
+		});
+		pending.set(key, request);
+		return request;
+	}
+	function resolveProjectId(slug: string) {
+		return shared(pendingProjects, slug, () => loadProjectId(slug));
+	}
+	function resolveNodeTitle(slug: string, nodeId: string) {
+		return shared(pendingNodes, `${slug}:${nodeId}`, () => loadNodeTitle(slug, nodeId));
+	}
+
+	async function loadProjectId(projectSlug: string): Promise<string | null> {
 		const cached = projectIdBySlug.get(projectSlug);
 		if (cached) return cached;
 
@@ -45,7 +67,7 @@ export function createTaskContext(
 		return projectTitleById.get(projectId) ?? null;
 	}
 
-	async function resolveNodeTitle(projectSlug: string, nodeId: string): Promise<string | null> {
+	async function loadNodeTitle(projectSlug: string, nodeId: string): Promise<string | null> {
 		const projectId = await resolveProjectId(projectSlug);
 		if (!projectId) return null;
 
@@ -107,6 +129,8 @@ export function createTaskContext(
 		resolveNodeTitle,
 		clear() {
 			generation++;
+			pendingProjects.clear();
+			pendingNodes.clear();
 			projectIdBySlug.clear();
 			projectTitleById.clear();
 			nodeTitleByKey.clear();

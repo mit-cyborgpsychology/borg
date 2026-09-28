@@ -92,13 +92,19 @@ test('auth state cannot restore a signed-out user after approval lookup complete
 test('task feature filters collaborator scope and joins titles before publishing', async () => {
 	const feature = createTasksState(
 		{
-			getActiveTasks: async () => [
-				{ id: 'allowed', projectSlug: 'a' },
-				{ id: 'hidden', projectSlug: 'b' }
-			],
-			getResolvedTasks: async () => [{ id: 'resolved', projectSlug: 'a' }]
+			getTaskPage: async ({ status }) => ({
+				tasks:
+					status === 'active'
+						? [
+								{ id: 'allowed', projectSlug: 'a' },
+								{ id: 'hidden', projectSlug: 'b' }
+							]
+						: [{ id: 'resolved', projectSlug: 'a' }],
+				nextCursor: null
+			}),
+			getTaskProjectCount: async () => 2
 		},
-		{ getAllProjects: async () => [{ slug: 'a' }] },
+		{ getAllProjects: async () => [{ slug: 'a', title: 'Project A' }] },
 		async (tasks) => tasks.map((task) => ({ ...task, projectTitle: 'Current title' }))
 	);
 	await feature.load(true);

@@ -17,6 +17,7 @@
 	);
 	const profile = feature.profile;
 	const tasks = feature.assigned;
+	const directory = feature.directory;
 	const command = feature.command;
 	onDestroy(() => feature.dispose());
 	let editingName = $state(false);
@@ -53,6 +54,11 @@
 </script>
 
 <StatusOverlay>
+	{#if $directory.status === 'error'}<AsyncStatus
+			state={$directory}
+			onRetry={() => void loadTasks()}
+		/>{/if}
+
 	<AsyncStatus state={$profile} onRetry={() => void loadProfile()} />
 	<AsyncStatus state={$tasks} onRetry={() => void loadTasks()} />
 </StatusOverlay>
