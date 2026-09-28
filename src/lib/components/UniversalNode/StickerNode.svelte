@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
+	let deleteDialog: ConfirmDeleteDialog;
 	import { getCanvasActions } from '$lib/features/canvas/context';
 	const canvasActions = getCanvasActions();
 	import { Handle, Position } from '@xyflow/svelte';
@@ -127,10 +129,10 @@
 	}
 
 	// Handle delete
-	function handleDelete(event: MouseEvent) {
+	async function handleDelete(event: MouseEvent) {
 		event.stopPropagation();
 
-		if (confirm('Are you sure you want to delete this sticker?')) {
+		if (await deleteDialog.open({ message: 'Are you sure you want to delete this sticker?' })) {
 			canvasActions.nodeDelete({ nodeId: id });
 		}
 	}
@@ -173,6 +175,8 @@
 		});
 	}
 </script>
+
+<ConfirmDeleteDialog bind:this={deleteDialog} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->

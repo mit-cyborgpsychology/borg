@@ -154,3 +154,13 @@ submission environment variables. Deploy the updated `deploy/paper-submit/handle
 to enable the queue/history check. Missing configuration is shown separately from
 an unavailable service. Run `BORG_TEST_URL=http://127.0.0.1:5182 node tests/browser/research-monitor.mjs`
 against a demo Firebase development server for the browser integration check.
+
+### Outline project notes
+
+Add an Outline node inside a project, then choose **Create note**. Its first
+document creates a workspace-editable Outline collection; later documents reuse
+it. **Link existing note** attaches another document from that project collection.
+The note opens in an embedded Outline editor with an external-tab fallback.
+Document content stays in Outline; Borg refreshes its title and link metadata.
+See [Outline integration setup](deploy/outline/README.md) for configuration,
+creation recovery, and iframe deployment.

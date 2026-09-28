@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
+	let deleteDialog: ConfirmDeleteDialog;
 	import {
 		getTemplate,
 		type NodeTemplate,
@@ -79,14 +81,14 @@
 	let autoSaveTimeout: ReturnType<typeof setTimeout>;
 	let isSaving = $state(false);
 
-	function handleDelete() {
+	async function handleDelete() {
 		// Additional safety check for project nodes
 		if (templateType === 'project') {
 			alert('Project nodes cannot be deleted as they sync with workspace metadata.');
 			return;
 		}
 
-		if (confirm('Are you sure you want to delete this node?')) {
+		if (await deleteDialog.open({ message: 'Are you sure you want to delete this node?' })) {
 			onDelete(nodeId);
 		}
 	}
@@ -158,6 +160,8 @@
 		].filter((group) => group.fields.length > 0)
 	);
 </script>
+
+<ConfirmDeleteDialog bind:this={deleteDialog} />
 
 {#snippet fieldVisibility(field: TemplateField)}
 	<FieldVisibilityToggle

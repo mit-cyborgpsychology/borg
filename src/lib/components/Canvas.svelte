@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
+	let deleteDialog: ConfirmDeleteDialog;
 	import { getTemplate } from '$lib/templates';
 	import { getLinkTitle } from '$lib/features/links/linkNode';
 	import {
@@ -217,14 +219,16 @@
 	// Delete all selected nodes
 	async function deleteSelectedNodes() {
 		if (selectedNodes.length === 0) return;
+		const nodesToDelete = [...selectedNodes];
 		if (
-			!confirm(
-				`Delete ${selectedNodes.length} selected node${selectedNodes.length > 1 ? 's' : ''}?`
-			)
+			!(await deleteDialog.open({
+				title: 'Delete selected nodes?',
+				message: `Delete ${nodesToDelete.length} selected node${nodesToDelete.length > 1 ? 's' : ''}?`
+			}))
 		)
 			return;
 
-		for (const node of selectedNodes) {
+		for (const node of nodesToDelete) {
 			nodesService.deleteNode(node.id);
 		}
 
@@ -714,7 +718,7 @@
 		return true;
 	}
 
-	function handleDelete({
+	async function handleDelete({
 		nodes: nodesToDelete,
 		edges: edgesToDelete
 	}: {
@@ -997,6 +1001,8 @@
 		)
 	);
 </script>
+
+<ConfirmDeleteDialog bind:this={deleteDialog} />
 
 <!-- Canvas and Sidebar Container -->
 <div class="flex h-full w-full">

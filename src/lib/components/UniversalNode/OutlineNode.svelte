@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
+	let deleteDialog: ConfirmDeleteDialog;
 	import { getCanvasActions } from '$lib/features/canvas/context';
 	const canvasActions = getCanvasActions();
 	import { getAppServices } from '$lib/app/context';
@@ -96,9 +98,11 @@
 		});
 	}
 
-	function handleDelete(e: MouseEvent) {
+	async function handleDelete(e: MouseEvent) {
 		e.stopPropagation();
-		if (confirm('Remove this node? The document will remain in Outline.')) {
+		if (
+			await deleteDialog.open({ message: 'Remove this node? The document will remain in Outline.' })
+		) {
 			canvasActions.nodeDelete({ nodeId: id });
 		}
 	}
@@ -138,6 +142,8 @@
 		}
 	}
 </script>
+
+<ConfirmDeleteDialog bind:this={deleteDialog} />
 
 <div class="group relative">
 	<div

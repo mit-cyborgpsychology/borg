@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
+	let deleteDialog: ConfirmDeleteDialog;
 	import { getCanvasActions } from '$lib/features/canvas/context';
 	const canvasActions = getCanvasActions();
 	import {
@@ -105,7 +107,7 @@
 		};
 	}
 
-	function handleDelete(event: MouseEvent) {
+	async function handleDelete(event: MouseEvent) {
 		event.stopPropagation();
 
 		if (templateType === 'project') {
@@ -113,7 +115,7 @@
 			return;
 		}
 
-		if (confirm('Are you sure you want to delete this node?')) {
+		if (await deleteDialog.open({ message: 'Are you sure you want to delete this node?' })) {
 			onDelete();
 		}
 	}
@@ -141,6 +143,8 @@
 		});
 	}
 </script>
+
+<ConfirmDeleteDialog bind:this={deleteDialog} />
 
 {#if template.id === 'project'}
 	<!-- Project header (appears outside the main node box) -->

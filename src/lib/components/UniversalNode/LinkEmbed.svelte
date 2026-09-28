@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
+	let deleteDialog: ConfirmDeleteDialog;
 	import { onDestroy } from 'svelte';
 	import { Handle, Position, useSvelteFlow } from '@xyflow/svelte';
 	import { Lock, Unlock, Trash2 } from '@lucide/svelte';
@@ -32,8 +34,8 @@
 		actions.nodeEdit({ nodeId: id, nodeData, templateType: 'link' });
 	}
 
-	function remove() {
-		if (confirm('Are you sure you want to delete this link node?')) {
+	async function remove() {
+		if (await deleteDialog.open({ message: 'Are you sure you want to delete this link node?' })) {
 			actions.nodeDelete({ nodeId: id });
 		}
 	}
@@ -77,6 +79,8 @@
 		update({ width, height });
 	}
 </script>
+
+<ConfirmDeleteDialog bind:this={deleteDialog} />
 
 <div
 	class="group relative rounded-lg border border-zinc-200 bg-white"

@@ -110,6 +110,22 @@ try {
 		await fetch(db + 'projects/' + id, { headers: { Authorization: 'Bearer owner' } })
 	).json();
 	collectionId = project.fields.outlineCollectionId.stringValue;
+	const collectionResponse = await fetch(
+		env.OUTLINE_API_URL.replace(/\/api\/?$/, '') + '/api/collections.info',
+		{
+			method: 'POST',
+			headers: {
+				Authorization: 'Bearer ' + env.OUTLINE_API_TOKEN,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({ id: collectionId })
+		}
+	);
+	assert.equal(collectionResponse.status, 200);
+	const collection = (await collectionResponse.json()).data;
+	assert.equal(collection.permission, 'read_write');
+	assert.equal(collection.sharing, false);
+
 	const dialog = page.getByRole('dialog', { name: 'Outline document editor' });
 	await dialog.waitFor();
 	await dialog
