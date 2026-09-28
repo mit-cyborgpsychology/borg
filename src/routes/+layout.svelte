@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import ReleaseWelcome from '$lib/components/ReleaseWelcome.svelte';
 	import LoginRequired from '$lib/components/auth/LoginRequired.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { createAppServices } from '$lib/app/createAppServices';
@@ -25,4 +26,7 @@
 
 <LoginRequired>
 	{@render children()}
+	{#if $authStore.user}
+		<ReleaseWelcome />
+	{/if}
 </LoginRequired>
