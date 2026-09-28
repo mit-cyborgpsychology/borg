@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, type Snippet } from 'svelte';
 	import { describeLink, normalizeLinkUrl } from '$lib/features/links/linkNode';
 	import LinkIcon from './LinkIcon.svelte';
 	import { Square, PanelsTopLeft } from '@lucide/svelte';
 
-	let { value = $bindable() } = $props<{
+	let { value = $bindable(), fieldActions } = $props<{
 		value: { url?: string; description?: string; viewMode?: string };
+		fieldActions?: Snippet<[fieldId: string]>;
 	}>();
 	let link = $derived(describeLink(value.url));
 	let urlTouched = $state(false);
@@ -31,18 +32,21 @@
 		<div>
 			<div class="mb-1 flex min-h-5 items-center justify-between gap-2">
 				<label for="url" class="!mb-0">URL</label>
-				<span aria-live="polite" class="max-w-[75%] min-w-0">
-					{#if link.url}
-						<span
-							title={`${link.providerName} · ${link.label}`}
-							class="flex items-center gap-1.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500"
-						>
-							<LinkIcon url={value.url} size="h-3 w-3" /><span class="truncate"
-								>{link.providerName}</span
+				<div class="flex max-w-[75%] min-w-0 items-center gap-2">
+					<span aria-live="polite" class="min-w-0">
+						{#if link.url}
+							<span
+								title={`${link.providerName} · ${link.label}`}
+								class="flex items-center gap-1.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500"
 							>
-						</span>
-					{/if}
-				</span>
+								<LinkIcon url={value.url} size="h-3 w-3" /><span class="truncate"
+									>{link.providerName}</span
+								>
+							</span>
+						{/if}
+					</span>
+					{@render fieldActions?.('url')}
+				</div>
 			</div>
 			<input
 				id="url"
@@ -61,7 +65,10 @@
 				</p>{/if}
 		</div>
 		<div>
-			<label for="description" class="mb-1 block">Description</label>
+			<div class="mb-1 flex min-h-5 items-center justify-between gap-2">
+				<label for="description" class="!mb-0">Description</label>
+				{@render fieldActions?.('description')}
+			</div>
 			<textarea
 				id="description"
 				aria-label="Description"

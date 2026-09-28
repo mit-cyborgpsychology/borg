@@ -56,7 +56,6 @@
 	import NoteNode from './UniversalNode/NoteNode.svelte';
 	import StickerNode from './UniversalNode/StickerNode.svelte';
 	import type { INodesService } from '../services/interfaces';
-	import CreateNodeModal from './CreateNodeModal.svelte';
 	import EditPanel from './EditPanel.svelte';
 	import NodeTaskSidebar from './tasks/NodeTaskSidebar.svelte';
 	import TaskModal from './tasks/TaskModal.svelte';
@@ -119,8 +118,6 @@
 	let saveError = $state<string | null>(null);
 	let disposed = false;
 	const persistence = new CanvasPersistence((nodes, edges) => nodesService.saveBatch(nodes, edges));
-	let showCreateModal = $state(false);
-	let createPosition = $state({ x: 0, y: 0 });
 	let saveTimeout: ReturnType<typeof setTimeout>;
 	let hasAttemptedProjectNodeCreation = false;
 
@@ -523,36 +520,6 @@
 		};
 	});
 
-	function handleCanvasClick(event: MouseEvent) {
-		const target = event.target as HTMLElement;
-		// Check if clicking on the background pane (not on nodes, controls, etc.)
-		// Use more specific targeting to avoid duplicate triggers
-		if (
-			target.classList.contains('svelte-flow__pane') ||
-			target.classList.contains('react-flow__pane') ||
-			(target.closest('.svelte-flow') &&
-				!target.closest('.svelte-flow__node') &&
-				!target.closest('.svelte-flow__controls') &&
-				!target.closest('.svelte-flow__minimap') &&
-				target === target.closest('.svelte-flow')?.querySelector('.svelte-flow__renderer'))
-		) {
-			// Prevent multiple rapid clicks
-			if (showCreateModal) return;
-
-			// Get the center of the viewport
-			// createPosition = getViewportCenterPosition();
-			// showCreateModal = true;
-		}
-	}
-
-	async function handleCreateNode(templateType: string) {
-		// Prevent duplicate node creation if modal is already closing
-		if (!showCreateModal || !nodesService) return;
-
-		const result = await createCanvasNode(templateType, createPosition);
-		if (result.ok) showCreateModal = false;
-	}
-
 	function handleToolbarCreateNode(templateType: string) {
 		if (!nodesService) return;
 
@@ -735,16 +702,6 @@
 					console.error('❌ Failed emergency cleanup of sticker node:', deleteError);
 				}
 			}
-		}
-	}
-
-	function handleKeyDown(event: KeyboardEvent) {
-		if (event.key === '/' && !showCreateModal && !showEditPanel) {
-			event.preventDefault();
-
-			// Get the center of the viewport
-			createPosition = getViewportCenterPosition();
-			showCreateModal = true;
 		}
 	}
 
@@ -1073,14 +1030,10 @@
 	);
 </script>
 
-<svelte:window on:keydown={handleKeyDown} />
-
 <!-- Canvas and Sidebar Container -->
 <div class="flex h-full w-full">
 	<!-- Canvas -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="relative flex-1" onclick={handleCanvasClick}>
+	<div class="relative flex-1">
 		<StatusOverlay>
 			<AsyncStatus
 				state={{ status: projectStore.status, error: projectStore.error }}
@@ -1444,15 +1397,6 @@
 		{/if}
 	</div>
 </div>
-
-{#if showCreateModal}
-	<CreateNodeModal
-		error={$editCommand.error}
-		position={createPosition}
-		onCreate={handleCreateNode}
-		onClose={() => (showCreateModal = false)}
-	/>
-{/if}
 
 {#if showTaskModal}
 	<TaskModal

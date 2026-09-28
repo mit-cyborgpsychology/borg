@@ -7,7 +7,7 @@
 	} from '../templates';
 	import FieldRenderer from './fields/FieldRenderer.svelte';
 	import NodeDetails from './fields/NodeDetails.svelte';
-	import FieldVisibilityManager from './fields/FieldVisibilityManager.svelte';
+	import FieldVisibilityToggle from './fields/FieldVisibilityToggle.svelte';
 	import LinkSettings from './fields/LinkSettings.svelte';
 	import InspectorTitle from './fields/InspectorTitle.svelte';
 	import { describeLink } from '$lib/features/links/linkNode';
@@ -91,6 +91,14 @@
 		}
 	}
 
+	function toggleFieldVisibility(field: TemplateField) {
+		const visible = editableData.fieldVisibility?.[field.id] ?? field.showInDisplay ?? true;
+		editableData = {
+			...editableData,
+			fieldVisibility: { ...editableData.fieldVisibility, [field.id]: !visible }
+		};
+	}
+
 	const appearanceIds = new Set([
 		'style',
 		'backgroundColor',
@@ -107,10 +115,21 @@
 				(field.id === 'title' || field.id === 'name') && field.type === 'text'
 		)
 	);
+	let doneField = $derived(
+		template.fields.find(
+			(field: TemplateField) =>
+				field.id === 'status' &&
+				field.type === 'status' &&
+				field.options?.length === 1 &&
+				field.options[0] === 'Done'
+		)
+	);
+	let isDone = $derived(editableData.status === 'Done');
 	let genericFields = $derived(
 		template.fields.filter(
 			(field: TemplateField) =>
 				field.id !== titleField?.id &&
+				field.id !== doneField?.id &&
 				(template.id !== 'link' || !['url', 'description', 'viewMode'].includes(field.id))
 		)
 	);
@@ -140,18 +159,29 @@
 	);
 </script>
 
+{#snippet fieldVisibility(field: TemplateField)}
+	<FieldVisibilityToggle
+		label={field.label}
+		visible={editableData.fieldVisibility?.[field.id] ?? field.showInDisplay ?? true}
+		ontoggle={() => toggleFieldVisibility(field)}
+	/>
+{/snippet}
+
 <header class="shrink-0 border-b border-zinc-200 px-4 py-3">
 	{#if titleField && (template.id !== 'link' || editableData.title || describeLink(editableData.url).url)}
-		<div class="mb-2">
-			{#key nodeId}
-				<InspectorTitle
-					bind:value={editableData[titleField.id]}
-					fallback={template.id === 'link'
-						? describeLink(editableData.url).providerName || 'Link'
-						: template.name}
-					automatic={template.id === 'link'}
-				/>
-			{/key}
+		<div class="mb-2 flex items-start gap-2">
+			<div class="min-w-0 flex-1">
+				{#key nodeId}
+					<InspectorTitle
+						bind:value={editableData[titleField.id]}
+						fallback={template.id === 'link'
+							? describeLink(editableData.url).providerName || 'Link'
+							: template.name}
+						automatic={template.id === 'link'}
+					/>
+				{/key}
+			</div>
+			<div class="pt-1">{@render fieldVisibility(titleField)}</div>
 		</div>
 	{/if}
 	<div class="flex items-center justify-between gap-3">
@@ -162,6 +192,31 @@
 		<div class="flex shrink-0 items-center gap-2">
 			{#if isSaving && !error}
 				<span role="status" class=" text-[11px] text-zinc-400">Saving…</span>
+			{/if}
+			{#if doneField}
+				<button
+					type="button"
+					role="switch"
+					aria-label="Done"
+					aria-checked={isDone}
+					title={isDone ? 'Mark as not done' : 'Mark as done'}
+					onclick={() => (editableData.status = isDone ? '' : 'Done')}
+					class="flex items-center gap-1.5 rounded py-1 text-xs text-zinc-500 focus-visible:outline-2 focus-visible:outline-zinc-400"
+				>
+					<span>Done</span>
+					<span
+						aria-hidden="true"
+						class="inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors {isDone
+							? 'bg-zinc-700'
+							: 'bg-zinc-200'}"
+					>
+						<span
+							class="h-3 w-3 rounded-full bg-white shadow-sm transition-transform {isDone
+								? 'translate-x-3'
+								: 'translate-x-0'}"
+						></span>
+					</span>
+				</button>
 			{/if}
 			<button
 				onclick={() => {
@@ -186,7 +241,14 @@
 
 <div class="inspector-fields min-h-0 flex-1 overflow-y-auto overscroll-contain text-xs">
 	{#if template.id === 'link'}
-		{#key nodeId}<LinkSettings bind:value={editableData} />{/key}
+		{#key nodeId}
+			<LinkSettings bind:value={editableData}>
+				{#snippet fieldActions(id: string)}
+					{@const field = template.fields.find((field: TemplateField) => field.id === id)}
+					{#if field}{@render fieldVisibility(field)}{/if}
+				{/snippet}
+			</LinkSettings>
+		{/key}
 	{/if}
 	{#each fieldGroups as group (group.title)}
 		<section class="border-b border-zinc-200 px-4 py-4" aria-label={group.title}>
@@ -199,7 +261,13 @@
 						readonly={false}
 						mode="edit"
 						nodeData={editableData}
-					/>
+					>
+						{#snippet actions()}
+							{#if field.id !== 'status' && !appearanceIds.has(field.id)}
+								{@render fieldVisibility(field)}
+							{/if}
+						{/snippet}
+					</FieldRenderer>
 				{/each}
 			</div>
 		</section>
@@ -227,11 +295,6 @@
 			templateFields={template.fields}
 		/>
 	{/key}
-	<section class="border-b border-zinc-200 px-4 py-4" aria-label="Visible on canvas">
-		<div class="[&_h4]:font-sans [&>div]:mt-0 [&>div]:border-0 [&>div]:pt-0">
-			<FieldVisibilityManager templateFields={template.fields} bind:nodeData={editableData} />
-		</div>
-	</section>
 </div>
 
 {#if templateType !== 'project'}

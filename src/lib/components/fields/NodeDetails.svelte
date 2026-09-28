@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { Eye, EyeOff, Plus, X, Undo2 } from '@lucide/svelte';
+	import { Plus, X, Undo2 } from '@lucide/svelte';
 	import type { TemplateField } from '../../templates';
 	import { createNodeDetail, inferDetailValue } from '$lib/features/canvas/nodeDetails';
 	import FieldRenderer from './FieldRenderer.svelte';
+	import FieldVisibilityToggle from './FieldVisibilityToggle.svelte';
 
 	let {
 		fields = $bindable(),
@@ -108,23 +109,13 @@
 			{#each fields as field, index (field.id)}
 				{@const visible = field.showInDisplay ?? true}
 				<div role="group" aria-label={field.label}>
-					<div class="mb-1 flex items-center justify-between gap-2">
-						<span
-							class="min-w-0 truncate text-[11px] font-medium text-zinc-500"
-							title={field.label}
-							aria-hidden="true">{field.label}</span
-						>
-						<div class="flex shrink-0 gap-1">
-							<button
-								type="button"
-								onclick={() => toggleVisibility(field.id)}
-								aria-pressed={visible}
-								aria-label={`${visible ? 'Hide' : 'Show'} ${field.label} on canvas`}
-								title={visible ? 'Hide on canvas' : 'Show on canvas'}
-								class="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-							>
-								{#if visible}<Eye class="h-3 w-3" />{:else}<EyeOff class="h-3 w-3" />{/if}
-							</button>
+					<FieldRenderer {field} bind:value={data[field.id]} mode="edit" nodeData={data}>
+						{#snippet actions()}
+							<FieldVisibilityToggle
+								label={field.label}
+								{visible}
+								ontoggle={() => toggleVisibility(field.id)}
+							/>
 							<button
 								type="button"
 								onclick={() => remove(field, index)}
@@ -133,11 +124,8 @@
 								class="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
 								><X class="h-3 w-3" /></button
 							>
-						</div>
-					</div>
-					<div class="detail-value">
-						<FieldRenderer {field} bind:value={data[field.id]} mode="edit" nodeData={data} />
-					</div>
+						{/snippet}
+					</FieldRenderer>
 				</div>
 			{/each}
 		</div>
@@ -207,19 +195,3 @@
 		</form>
 	{/if}
 </section>
-
-<style>
-	/* Keep the renderer's accessible labels without repeating the row heading. */
-	.detail-value :global(.field-container > label),
-	.detail-value :global(.field-container > span:first-child) {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
-		border: 0;
-	}
-</style>
