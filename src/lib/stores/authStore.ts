@@ -1,16 +1,15 @@
-import { writable } from 'svelte/store';
-import type { User } from 'firebase/auth';
-import { FirebaseAuth } from '../services/firebase/FirebaseAuth';
+import { writable, type Readable } from 'svelte/store';
+import type { IAuthService, AuthUser } from '../services/interfaces/IAuthService';
 
-interface AuthState {
-	user: User | null;
+export interface AuthState {
+	user: AuthUser | null;
 	isApproved: boolean;
 	userType: 'member' | 'collaborator' | null;
 	loading: boolean;
 	error: string | null;
 }
 
-const initialState: AuthState = {
+const initial: AuthState = {
 	user: null,
 	isApproved: false,
 	userType: null,
@@ -18,22 +17,54 @@ const initialState: AuthState = {
 	error: null
 };
 
-export const authStore = writable<AuthState>(initialState);
+/** Authentication state is application-scoped; the adapter is supplied by composition. */
+export function createAuthStore(service: IAuthService) {
+	const state = writable<AuthState>(initial);
+	let generation = 0;
+	let unsubscribe: (() => void) | undefined;
 
-// Initialize Firebase Auth
-const firebaseAuth = new FirebaseAuth();
-
-// Listen to auth state changes
-firebaseAuth.onAuthStateChange(async (user) => {
-	if (user) {
-		// Check approval status and user data
-		const isApproved = await firebaseAuth.checkUserApproval(user.uid);
-		const userData = await firebaseAuth.getUserData(user.uid);
-		const userType = userData?.userType || 'member';
-		authStore.set({ user, isApproved, userType, loading: false, error: null });
-	} else {
-		authStore.set({ user: null, isApproved: false, userType: null, loading: false, error: null });
+	function fail(error: unknown) {
+		generation++;
+		state.set({
+			...initial,
+			loading: false,
+			error: error instanceof Error ? error.message : 'Authentication failed'
+		});
 	}
-});
 
-export { firebaseAuth };
+	return {
+		state: { subscribe: state.subscribe } as Readable<AuthState>,
+		start() {
+			if (unsubscribe) return;
+			unsubscribe = service.onAuthStateChange(async (user) => {
+				const request = ++generation;
+				if (!user) {
+					state.set({ ...initial, loading: false });
+					return;
+				}
+				state.set({ ...initial, user });
+				try {
+					const [isApproved, data] = await Promise.all([
+						service.checkUserApproval(user.uid),
+						service.getUserData(user.uid)
+					]);
+					if (request === generation)
+						state.set({
+							user,
+							isApproved,
+							userType: data?.userType ?? 'member',
+							loading: false,
+							error: null
+						});
+				} catch (error) {
+					if (request === generation) fail(error);
+				}
+			}, fail);
+		},
+		dispose() {
+			generation++;
+			unsubscribe?.();
+			unsubscribe = undefined;
+		}
+	};
+}

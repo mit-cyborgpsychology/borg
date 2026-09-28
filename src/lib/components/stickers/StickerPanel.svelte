@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { getAppServices } from '$lib/app/context';
 	import { X } from '@lucide/svelte';
-	import { stickerService } from '../../services/instances';
 	import type { StickerCategory } from '../../types/sticker';
 	import StickerGrid from './StickerGrid.svelte';
 
+	const { stickerService } = getAppServices();
 	let { isOpen = $bindable(), onClose } = $props<{
 		isOpen: boolean;
 		onClose: () => void;
@@ -22,7 +23,7 @@
 					console.log('🎨 Loading sticker categories...');
 					loading = true;
 					error = null;
-					
+
 					// The service now has multi-layer caching, so this should be very fast on subsequent calls
 					categories = await stickerService.getCategories();
 					console.log('🎨 Loaded categories:', categories.length);
@@ -49,7 +50,6 @@
 
 	// Get active category data
 	let activeCategoryData = $derived(categories.find((cat) => cat.slug === activeCategory));
-
 
 	function handleCategoryClick(categorySlug: string) {
 		if (activeCategory !== categorySlug) {
@@ -94,7 +94,6 @@
 				</button>
 			</div>
 		</div>
-
 
 		<!-- Loading state -->
 		{#if loading}

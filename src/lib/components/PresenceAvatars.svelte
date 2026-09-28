@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { authStore } from '../stores/authStore';
-	import { doc, getDoc, setDoc } from 'firebase/firestore';
-	import { db } from '../firebase/config';
-	import type { User } from 'firebase/auth';
+	import type { PresenceConnection } from '../services/interfaces/IPresenceService';
+	import { getAppServices } from '$lib/app/context';
+	import { untrack } from 'svelte';
+	import type { AuthUser as User } from '../services/interfaces/IAuthService';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 
+	const { presenceService, authStore, profileService } = getAppServices();
 	interface ActiveUser {
 		userId: string;
 		userName: string;
@@ -24,19 +24,26 @@
 	let wsRoom = $derived(room ?? '__global__');
 
 	let activeUsers = $state<Map<string, ActiveUser>>(new Map());
-	let ws: WebSocket | null = null;
+	let ws: PresenceConnection | null = null;
 	let currentUser: User | null = $state(null);
 	let userColor = $state('');
-	let staleTimer: ReturnType<typeof setInterval> | null = null;
+	let connectionVersion = 0;
 	const photoCache = new Map<string, Promise<string>>();
 	let lastWrittenPage = '';
 
 	const STALE_THRESHOLD = 30000;
 
 	const COLORS = [
-		'#ef4444', '#f97316', '#eab308', '#22c55e',
-		'#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef',
-		'#f43f5e', '#10b981'
+		'#ef4444',
+		'#f97316',
+		'#eab308',
+		'#22c55e',
+		'#06b6d4',
+		'#3b82f6',
+		'#8b5cf6',
+		'#d946ef',
+		'#f43f5e',
+		'#10b981'
 	];
 
 	function colorForUser(uid: string): string {
@@ -46,14 +53,23 @@
 	}
 
 	function initials(name: string): string {
-		return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+		return name
+			.split(' ')
+			.map((w) => w[0])
+			.join('')
+			.slice(0, 2)
+			.toUpperCase();
 	}
 
 	function fetchPhoto(userId: string): Promise<string> {
 		if (!photoCache.has(userId)) {
-			photoCache.set(userId, getDoc(doc(db, 'users', userId))
-				.then((snap) => snap.data()?.photoUrl || '')
-				.catch(() => ''));
+			photoCache.set(
+				userId,
+				profileService
+					.getProfile(userId)
+					.then((profile) => profile?.photoUrl || '')
+					.catch(() => '')
+			);
 		}
 		return photoCache.get(userId)!;
 	}
@@ -63,14 +79,15 @@
 		if (!currentUser || path === lastWrittenPage) return;
 		lastWrittenPage = path;
 		try {
-			await setDoc(doc(db, 'users', currentUser.uid), { currentPage: path }, { merge: true });
+			await profileService.updateProfile(currentUser.uid, { currentPage: path });
 		} catch {}
 	}
 
 	$effect(() => {
 		const unsub = authStore.subscribe((auth) => {
 			currentUser = auth.user;
-			if (auth.user && !userColor) userColor = colorForUser(auth.user.uid);
+			userColor = auth.user ? colorForUser(auth.user.uid) : '';
+			lastWrittenPage = '';
 		});
 		return unsub;
 	});
@@ -84,23 +101,20 @@
 
 	function connect() {
 		if (!currentUser) return;
-		ws = new WebSocket(`wss://borg-cursors.chayapatr.partykit.dev/party/${wsRoom}`);
-		ws.onopen = () => sendPresence();
-		ws.onmessage = (event) => {
-			try { handleMessage(JSON.parse(event.data)); } catch {}
-		};
-		ws.onclose = () => setTimeout(connect, 3000);
+		ws = presenceService.connect(wsRoom, { connected: sendPresence, message: handleMessage });
 	}
 
 	function sendPresence() {
-		if (!ws || ws.readyState !== WebSocket.OPEN || !currentUser) return;
-		ws.send(JSON.stringify({
+		if (!ws || !currentUser) return;
+		ws.send({
 			type: 'cursor_update',
 			userId: currentUser.uid,
 			userName: currentUser.displayName || 'Anonymous',
 			color: userColor,
-			x: 0, y: 0, pointer: 'mouse'
-		}));
+			x: 0,
+			y: 0,
+			pointer: 'mouse'
+		});
 	}
 
 	function handleMessage(data: any) {
@@ -118,7 +132,9 @@
 	}
 
 	async function upsertUser(data: any) {
+		const version = connectionVersion;
 		const photoUrl = await fetchPhoto(data.userId);
+		if (version !== connectionVersion) return;
 		activeUsers.set(data.userId, {
 			userId: data.userId,
 			userName: data.userName || 'Anonymous',
@@ -141,8 +157,8 @@
 		if (user.userId === currentUser?.uid) return;
 		if (!isGlobal) return; // only navigate from global/main page
 		// Re-fetch fresh page location
-		const snap = await getDoc(doc(db, 'users', user.userId));
-		const targetPage = snap.data()?.currentPage || '/';
+		const profile = await profileService.getProfile(user.userId);
+		const targetPage = profile?.currentPage || '/';
 		goto(targetPage);
 	}
 
@@ -161,25 +177,26 @@
 	});
 
 	let allUsers = $derived(
-		selfUser
-			? [selfUser, ...Array.from(activeUsers.values())]
-			: Array.from(activeUsers.values())
+		selfUser ? [selfUser, ...Array.from(activeUsers.values())] : Array.from(activeUsers.values())
 	);
 
-	onMount(() => {
-		connect();
-		const heartbeat = setInterval(sendPresence, 10000);
-		staleTimer = setInterval(cleanStale, 10000);
-		return () => clearInterval(heartbeat);
-	});
-
-	onDestroy(() => {
-		if (staleTimer) clearInterval(staleTimer);
-		if (ws) ws.close();
-	});
-
 	$effect(() => {
-		if (currentUser && !ws) connect();
+		const userId = currentUser?.uid;
+		const room = wsRoom;
+		if (!userId || !room) return;
+		untrack(connect);
+		const connection = ws;
+		const heartbeat = setInterval(sendPresence, 10000);
+		const staleTimer = setInterval(cleanStale, 10000);
+		return () => {
+			connectionVersion++;
+			clearInterval(heartbeat);
+			clearInterval(staleTimer);
+			connection?.close();
+			ws = null;
+			activeUsers = new Map();
+			photoCache.clear();
+		};
 	});
 </script>
 
@@ -207,7 +224,9 @@
 					{initials(user.userName)}
 				</div>
 			{/if}
-			<div class="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+			<div
+				class="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 rounded bg-zinc-800 px-2 py-0.5 text-[10px] whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100"
+			>
 				{user.userName}{isSelf ? ' (you)' : ''}
 			</div>
 		</button>

@@ -1,8 +1,13 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { createPeopleDirectory } from '../../features/people/createPeopleDirectory';
+	import { createTaskCommands } from '../../features/tasks/createTaskCommands';
+	import AsyncStatus from '../AsyncStatus.svelte';
+	import { getAppServices } from '$lib/app/context';
 	import { X } from '@lucide/svelte';
-	import { peopleService, taskService } from '../../services/instances';
 	import type { TaskWithContext } from '../../types/task';
 
+	const { peopleService, taskService } = getAppServices();
 	interface Props {
 		projectSlug: string;
 		projectTasks: TaskWithContext[];
@@ -13,31 +18,27 @@
 	let { projectSlug, projectTasks, onClose, onTasksUpdated }: Props = $props();
 
 	async function handleCompleteTask(task: TaskWithContext) {
-		try {
-			console.log('TaskSidebar: Starting to resolve task', { 
-				taskId: task.id, 
-				nodeId: task.nodeId, 
-				projectSlug: task.projectSlug 
-			});
-			const result = taskService.resolveTask(task.nodeId, task.id, task.projectSlug);
-			if (result instanceof Promise) await result;
-			console.log('TaskSidebar: Task resolved successfully, calling onTasksUpdated');
-			onTasksUpdated?.();
-		} catch (error) {
-			console.error('Failed to complete task:', error);
-			alert('Failed to complete task. Please try again.');
-		}
+		await taskCommands.resolve(task);
 	}
-	let allPeople = $state<any[]>([]);
 
-	// Load all people once for efficient lookup
-	$effect(() => {
-		(async () => {
-			const result = peopleService.getAllPeople();
-			allPeople = result instanceof Promise ? await result : result;
-		})();
+	const directory = createPeopleDirectory(peopleService);
+	const peopleResource = directory.list;
+	let allPeople = $derived($peopleResource.data);
+	const taskCommands = createTaskCommands(taskService, async () => {
+		onTasksUpdated?.();
+	});
+	const command = taskCommands.command;
+	onMount(() => {
+		void directory.load();
+	});
+	onDestroy(() => {
+		directory.dispose();
+		taskCommands.dispose();
 	});
 </script>
+
+<AsyncStatus state={$peopleResource} onRetry={() => void directory.load()} />
+<AsyncStatus state={$command} pendingLabel="Saving…" />
 
 <div class="flex h-[calc(100vh-64px)] w-80 flex-col border-l border-zinc-200 bg-white">
 	<!-- Sidebar Header -->

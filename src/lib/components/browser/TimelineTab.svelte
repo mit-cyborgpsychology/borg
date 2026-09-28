@@ -1,22 +1,31 @@
 <script lang="ts">
-	import type { ITimelineService } from '../../services/interfaces/ITimelineService';
+	import { onDestroy } from 'svelte';
+	import { createTimelineState } from '../../features/timeline/createTimelineState';
+	import AsyncStatus from '../AsyncStatus.svelte';
+	import StatusOverlay from '../StatusOverlay.svelte';
+	import { getAppServices } from '$lib/app/context';
 	import type { TimelineEvent } from '$lib/types/timeline';
 	import AddTimelineEventModal from './AddTimelineEventModal.svelte';
 	import { CalendarPlus, Calendar, DollarSign, Clock, Fish } from '@lucide/svelte';
+	const timelineService = getAppServices().createTimelineService();
 
-	let { timelineService, activeTab } = $props<{
-		timelineService: ITimelineService;
+	const featureState = createTimelineState(timelineService);
+	const resource = featureState.list;
+	const command = featureState.command;
+	onDestroy(() => featureState.dispose());
+
+	let { activeTab } = $props<{
 		activeTab: string;
 	}>();
 
-	let events = $state<TimelineEvent[]>([]);
+	let events = $derived($resource.data);
 	let upcomingEvents = $state<TimelineEvent[]>([]);
 	let pastEvents = $state<TimelineEvent[]>([]);
 	let filteredUpcomingEvents = $state<TimelineEvent[]>([]);
 	let filteredPastEvents = $state<TimelineEvent[]>([]);
 	let showAddModal = $state(false);
 	let editingEvent = $state<TimelineEvent | undefined>(undefined);
-	let dataLoaded = $state(false);
+	let dataLoaded = $derived($resource.status !== 'idle');
 	let selectedTab = $state<'upcoming' | 'past'>('upcoming');
 	let selectedTypeFilter = $state<string>('all');
 
@@ -30,9 +39,11 @@
 	async function loadEvents(force = false) {
 		if (dataLoaded && !force) return; // Prevent duplicate loading unless forced
 
-		const result = timelineService.getEventsSortedByDate();
-		const allEvents = result instanceof Promise ? await result : result;
+		await featureState.load();
+	}
 
+	$effect(() => {
+		const allEvents = events;
 		const now = new Date();
 
 		// Split events into upcoming and past
@@ -81,11 +92,7 @@
 					: new Date(0);
 			return dateB.getTime() - dateA.getTime();
 		});
-
-		events = allEvents; // Keep all events for compatibility
-		applyTypeFilter();
-		dataLoaded = true;
-	}
+	});
 
 	// Apply type filter to events
 	function applyTypeFilter() {
@@ -115,40 +122,19 @@
 		}));
 	});
 
-	async function handleAddEvent(templateType: string, eventData: Record<string, any>) {
-		const result = timelineService.addEvent(templateType, eventData);
-		if (result instanceof Promise) await result;
-		await loadEvents(true); // Force reload to get new event
-		showAddModal = false;
+	async function handleAddEvent(templateType: string, eventData: Record<string, unknown>) {
+		if ((await featureState.add(templateType, eventData)).ok) showAddModal = false;
 	}
 
 	async function handleUpdateEvent(
 		id: string,
 		templateType: string,
-		eventData: Record<string, any>
+		eventData: Record<string, unknown>
 	) {
-		// Filter out undefined values and separate top-level fields from eventData
-		const { title, timestamp, ...dynamicEventData } = eventData;
-
-		const updates = {
-			templateType,
-			title: title || 'Untitled Event',
-			timestamp: timestamp || new Date().toISOString(),
-			eventData: dynamicEventData
-		};
-
-		// Remove any undefined values
-		Object.keys(updates).forEach((key) => {
-			if ((updates as any)[key] === undefined) {
-				delete (updates as any)[key];
-			}
-		});
-
-		const result = timelineService.updateEvent(id, updates);
-		if (result instanceof Promise) await result;
-		await loadEvents(true); // Force reload
-		showAddModal = false;
-		editingEvent = undefined;
+		if ((await featureState.update(id, templateType, eventData)).ok) {
+			showAddModal = false;
+			editingEvent = undefined;
+		}
 	}
 
 	function handleEditEvent(event: TimelineEvent) {
@@ -163,9 +149,7 @@
 
 	async function handleDeleteEvent(id: string) {
 		if (confirm('Are you sure you want to delete this event?')) {
-			const result = timelineService.deleteEvent(id);
-			if (result instanceof Promise) await result;
-			await loadEvents(true); // Force reload
+			await featureState.remove(id);
 		}
 	}
 
@@ -215,11 +199,11 @@
 				day: 'numeric',
 				year: 'numeric'
 			});
-			
+
 			// For time, we can use the original timestamp since time zones are handled correctly
 			const originalDate = new Date(timestamp);
 			const timeStr = originalDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-			
+
 			return `${dateStr} at ${timeStr}`;
 		} else {
 			// Handle other date formats or create new date
@@ -299,12 +283,29 @@
 	}
 </script>
 
+<StatusOverlay>
+	<AsyncStatus state={$command} pendingLabel="Saving…" />
+	<AsyncStatus state={$resource} onRetry={() => void loadEvents(true)} />
+</StatusOverlay>
+
 <div class="flex h-full w-full flex-col overflow-hidden">
 	<!-- Sticky single toolbar row -->
-	<div class="flex w-full flex-shrink-0 items-center gap-2 border-b border-borg-brown bg-borg-beige px-4 py-2">
+	<div
+		class="flex w-full flex-shrink-0 items-center gap-2 border-b border-borg-brown bg-borg-beige px-4 py-2"
+	>
 		<div class="flex rounded border border-zinc-300 bg-white p-0.5">
-			<button onclick={() => (selectedTab = 'upcoming')} class="rounded px-2.5 py-1 text-sm font-medium transition-colors {selectedTab === 'upcoming' ? 'bg-zinc-100 text-zinc-800' : 'text-zinc-500 hover:text-zinc-700'}">Upcoming ({filteredUpcomingEvents.length})</button>
-			<button onclick={() => (selectedTab = 'past')} class="rounded px-2.5 py-1 text-sm font-medium transition-colors {selectedTab === 'past' ? 'bg-zinc-100 text-zinc-800' : 'text-zinc-500 hover:text-zinc-700'}">Past ({filteredPastEvents.length})</button>
+			<button
+				onclick={() => (selectedTab = 'upcoming')}
+				class="rounded px-2.5 py-1 text-sm font-medium transition-colors {selectedTab === 'upcoming'
+					? 'bg-zinc-100 text-zinc-800'
+					: 'text-zinc-500 hover:text-zinc-700'}">Upcoming ({filteredUpcomingEvents.length})</button
+			>
+			<button
+				onclick={() => (selectedTab = 'past')}
+				class="rounded px-2.5 py-1 text-sm font-medium transition-colors {selectedTab === 'past'
+					? 'bg-zinc-100 text-zinc-800'
+					: 'text-zinc-500 hover:text-zinc-700'}">Past ({filteredPastEvents.length})</button
+			>
 		</div>
 		<div class="flex-1"></div>
 		<select
@@ -351,7 +352,13 @@
 								class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded"
 								style="background-color: {template.color}18; border: 1px solid {template.color}40;"
 							>
-								<svg class="h-4 w-4" style="color: {template.color}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<svg
+									class="h-4 w-4"
+									style="color: {template.color}"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
 									{#if template.icon === 'clock'}
 										<Clock />
 									{:else if template.icon === 'dollar-sign'}
@@ -370,15 +377,27 @@
 							<div class="flex flex-shrink-0 items-center gap-2">
 								<span class="text-xs text-zinc-400">{template.name}</span>
 								{#if !timeLeft.isOverdue}
-									<span class="rounded px-1.5 py-0.5 text-xs font-medium {getTimeLeftColor(timeLeft)} bg-zinc-50">{timeLeft.displayText}</span>
+									<span
+										class="rounded px-1.5 py-0.5 text-xs font-medium {getTimeLeftColor(
+											timeLeft
+										)} bg-zinc-50">{timeLeft.displayText}</span
+									>
 								{/if}
 								<button
-									onclick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+									onclick={(e) => {
+										e.stopPropagation();
+										handleDeleteEvent(event.id);
+									}}
 									class="rounded p-1 text-zinc-300 transition-colors hover:text-red-400"
 									aria-label="Delete event"
 								>
 									<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+										/>
 									</svg>
 								</button>
 							</div>
@@ -405,8 +424,15 @@
 							onclick={() => handleEditEvent(event)}
 						>
 							<!-- Greyed icon box for past events -->
-							<div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded border border-zinc-200 bg-zinc-50">
-								<svg class="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<div
+								class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded border border-zinc-200 bg-zinc-50"
+							>
+								<svg
+									class="h-4 w-4 text-zinc-400"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
 									{#if template.icon === 'clock'}
 										<Clock />
 									{:else if template.icon === 'dollar-sign'}
@@ -423,12 +449,20 @@
 							<div class="flex flex-shrink-0 items-center gap-2">
 								<span class="text-xs text-zinc-400">{template.name}</span>
 								<button
-									onclick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
+									onclick={(e) => {
+										e.stopPropagation();
+										handleDeleteEvent(event.id);
+									}}
 									class="rounded p-1 text-zinc-300 transition-colors hover:text-red-400"
 									aria-label="Delete event"
 								>
 									<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+										/>
 									</svg>
 								</button>
 							</div>
@@ -442,6 +476,7 @@
 
 {#if showAddModal}
 	<AddTimelineEventModal
+		error={$command.error}
 		onAdd={handleAddEvent}
 		onUpdate={handleUpdateEvent}
 		onClose={handleCloseModal}

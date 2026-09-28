@@ -1,9 +1,14 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { createPeopleDirectory } from '../../features/people/createPeopleDirectory';
+	import { createTaskCommands } from '../../features/tasks/createTaskCommands';
+	import AsyncStatus from '../AsyncStatus.svelte';
+	import { getAppServices } from '$lib/app/context';
 	import { StickyNote, Edit, Trash2 } from '@lucide/svelte';
 	import type { Task } from '../../types/task';
-	import { peopleService, taskService } from '../../services/instances';
 	import TaskModal from './TaskModal.svelte';
 
+	const { peopleService, taskService } = getAppServices();
 	interface Props {
 		tasks: Task[];
 		nodeId: string;
@@ -14,57 +19,30 @@
 	let { tasks, nodeId, projectSlug, onTasksUpdated }: Props = $props();
 
 	let editingTask = $state<Task | null>(null);
-	let allPeople = $state<any[]>([]);
-
-	// Load all people once for efficient lookup
-	$effect(() => {
-		(async () => {
-			const result = peopleService.getAllPeople();
-			allPeople = result instanceof Promise ? await result : result;
-		})();
+	const directory = createPeopleDirectory(peopleService);
+	const peopleResource = directory.list;
+	let allPeople = $derived($peopleResource.data);
+	const taskCommands = createTaskCommands(taskService, async () => {
+		onTasksUpdated?.();
+	});
+	const command = taskCommands.command;
+	onMount(() => {
+		void directory.load();
+	});
+	onDestroy(() => {
+		directory.dispose();
+		taskCommands.dispose();
 	});
 
-	async function handleResolveTask(taskId: string) {
-		try {
-			console.log('TaskList: Starting to resolve task', { taskId, nodeId, projectSlug });
-			const result = taskService.resolveTask(nodeId, taskId, projectSlug);
-			if (result instanceof Promise) await result;
-			console.log('TaskList: Task resolved successfully, calling onTasksUpdated');
-			onTasksUpdated?.();
-			console.log('TaskList: onTasksUpdated called');
-		} catch (error) {
-			console.error('Failed to resolve task:', error);
-			alert('Failed to resolve task. Please try again.');
-		}
+	async function handleResolveTask(id: string) {
+		await taskCommands.resolve({ id, nodeId, projectSlug });
 	}
-
-	async function handleReactivateTask(taskId: string) {
-		try {
-			const result = taskService.updateTask(
-				nodeId,
-				taskId,
-				{ status: 'active' } as Partial<Task>,
-				projectSlug
-			);
-			if (result instanceof Promise) await result;
-			onTasksUpdated?.();
-		} catch (error) {
-			console.error('Failed to reactivate task:', error);
-			alert('Failed to reactivate task. Please try again.');
-		}
+	async function handleReactivateTask(id: string) {
+		await taskCommands.reactivate({ id, nodeId, projectSlug });
 	}
-
-	async function handleDeleteTask(taskId: string) {
-		if (confirm('Are you sure you want to permanently delete this task?')) {
-			try {
-				const result = taskService.deleteTask(nodeId, taskId, projectSlug);
-				if (result instanceof Promise) await result;
-				onTasksUpdated?.();
-			} catch (error) {
-				console.error('Failed to delete task:', error);
-				alert('Failed to delete task. Please try again.');
-			}
-		}
+	async function handleDeleteTask(id: string) {
+		if (confirm('Are you sure you want to permanently delete this task?'))
+			await taskCommands.remove({ id, nodeId, projectSlug });
 	}
 
 	function handleEditTask(task: Task) {
@@ -80,26 +58,29 @@
 	}
 </script>
 
+<AsyncStatus state={$peopleResource} onRetry={() => void directory.load()} />
+<AsyncStatus state={$command} pendingLabel="Saving…" />
+
 <div class="space-y-3">
 	{#each tasks as task}
 		{@const person = allPeople.find((p) => p.id === task.assignee)}
 		{@const overdue = task.dueDate && isOverdue(task.dueDate)}
 		{@const isResolved = task.status === 'resolved'}
-		
+
 		<div class="group flex items-start gap-3 rounded-md py-2 {isResolved ? 'opacity-75' : ''}">
 			<!-- Checkbox -->
 			<div class="flex items-center pt-0.5">
 				{#if isResolved}
 					<button
 						onclick={() => handleReactivateTask(task.id)}
-						class="h-4 w-4 rounded border border-zinc-300 bg-green-500 hover:border-orange-500 hover:bg-orange-50 transition-colors"
+						class="h-4 w-4 rounded border border-zinc-300 bg-green-500 transition-colors hover:border-orange-500 hover:bg-orange-50"
 						title="Reactivate task"
 						aria-label="Reactivate task"
 					></button>
 				{:else}
 					<button
 						onclick={() => handleResolveTask(task.id)}
-						class="h-4 w-4 rounded border border-zinc-300 hover:border-green-500 hover:bg-green-50 transition-colors"
+						class="h-4 w-4 rounded border border-zinc-300 transition-colors hover:border-green-500 hover:bg-green-50"
 						title="Mark as resolved"
 						aria-label="Mark as resolved"
 					></button>
@@ -109,7 +90,9 @@
 			<!-- Task content -->
 			<div class="min-w-0 flex-1">
 				<div class="mb-1 flex items-center justify-between">
-					<span class="text-sm text-zinc-900 text-balance {isResolved ? 'line-through opacity-60' : ''}">
+					<span
+						class="text-sm text-balance text-zinc-900 {isResolved ? 'line-through opacity-60' : ''}"
+					>
 						{task.title}
 					</span>
 					<!-- Action buttons -->
@@ -136,7 +119,7 @@
 				<!-- Task meta info -->
 				<div class="space-y-1 text-xs text-zinc-500">
 					{#if task.dueDate}
-						<div class="{overdue ? 'text-rose-500' : ''}">
+						<div class={overdue ? 'text-rose-500' : ''}>
 							Due {formatDate(task.dueDate)}
 							{#if overdue && !isResolved}
 								<span class="text-rose-500">(Overdue)</span>

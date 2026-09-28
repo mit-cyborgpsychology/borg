@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
 	import {
 		Trash2,
 		GitBranch,
@@ -121,18 +123,15 @@
 		};
 
 		// Dispatch update event to save changes
-		const updateEvent = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: {
-						...nodeData,
-						locked: newLockState
-					}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: {
+					...nodeData,
+					locked: newLockState
 				}
 			}
 		});
-		document.dispatchEvent(updateEvent);
 	}
 </script>
 

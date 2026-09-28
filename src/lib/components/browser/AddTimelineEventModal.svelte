@@ -1,14 +1,17 @@
 <script lang="ts">
-	import {
-		timelineTemplates,
-		getTimelineTemplate,
-		type TimelineEvent
-	} from '../../types/timeline';
+	import { timelineTemplates, getTimelineTemplate, type TimelineEvent } from '../../types/timeline';
 	import FieldRenderer from '../fields/FieldRenderer.svelte';
 
-	let { onAdd, onClose, editingEvent = undefined, onUpdate = undefined } = $props<{
+	let {
+		onAdd,
+		onClose,
+		editingEvent = undefined,
+		onUpdate = undefined,
+		error = null
+	} = $props<{
 		onAdd: (templateType: string, eventData: Record<string, any>) => void;
 		onClose: () => void;
+		error?: string | null;
 		editingEvent?: TimelineEvent;
 		onUpdate?: (id: string, templateType: string, eventData: Record<string, any>) => void;
 	}>();
@@ -43,12 +46,11 @@
 		try {
 			if (editingEvent && onUpdate) {
 				const result = onUpdate(editingEvent.id, selectedTemplateType, eventData);
-				if (result instanceof Promise) await result;
+				await result;
 			} else {
 				const result = onAdd(selectedTemplateType, eventData);
-				if (result instanceof Promise) await result;
+				await result;
 			}
-			onClose();
 		} catch (error) {
 			console.error('Error saving timeline event:', error);
 		} finally {
@@ -97,6 +99,7 @@
 		<!-- Content -->
 		<div class="flex-1 overflow-y-auto p-6">
 			<form onsubmit={handleSubmit} class="space-y-6">
+				{#if error}<p role="alert" class="text-sm text-red-700">{error}</p>{/if}
 				<!-- Event Type Selection -->
 				<div>
 					<span class="mb-3 block text-sm font-medium text-zinc-700"> Event Type </span>

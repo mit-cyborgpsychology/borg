@@ -1,8 +1,14 @@
 <script lang="ts">
-	let { onCreate, onClose, isLoading = false } = $props<{
+	let {
+		onCreate,
+		onClose,
+		isLoading = false,
+		error = null
+	} = $props<{
 		onCreate: (data: { title: string }) => void;
 		onClose: () => void;
 		isLoading?: boolean;
+		error?: string | null;
 	}>();
 
 	let title = $state('');
@@ -42,6 +48,7 @@
 		<h2 class="mb-4 text-lg font-semibold text-black">Create New Project</h2>
 
 		<form onsubmit={handleSubmit} class="space-y-4">
+			{#if error}<p role="alert" class="text-sm text-red-700">{error}</p>{/if}
 			<div>
 				<label for="title" class="mb-1 block text-sm font-medium text-zinc-700">
 					Project Name
@@ -53,7 +60,7 @@
 					placeholder="Enter project name"
 					required
 					disabled={isLoading}
-					class="w-full rounded border border-zinc-700 bg-white px-3 py-2 text-black placeholder-zinc-400 focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+					class="w-full rounded border border-zinc-700 bg-white px-3 py-2 text-black placeholder-zinc-400 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 					autofocus
 				/>
 			</div>
@@ -70,10 +77,12 @@
 				<button
 					type="submit"
 					disabled={!title.trim() || isLoading}
-					class="flex-1 rounded bg-borg-violet px-4 py-2 text-white transition-colors hover:bg-borg-blue disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center gap-2"
+					class="flex flex-1 items-center justify-center gap-2 rounded bg-borg-violet px-4 py-2 text-white transition-colors hover:bg-borg-blue disabled:cursor-not-allowed disabled:opacity-50"
 				>
 					{#if isLoading}
-						<div class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+						<div
+							class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+						></div>
 						Creating...
 					{:else}
 						Create Project

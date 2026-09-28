@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { peopleService } from '../../services/instances';
+	import { getAppServices } from '$lib/app/context';
 	import type { TemplateField } from '../../templates';
 
+	const { peopleService } = getAppServices();
 	let {
 		field,
 		value = $bindable(),
@@ -22,7 +23,7 @@
 	$effect(() => {
 		(async () => {
 			const result = peopleService.getAllPeople();
-			const people = result instanceof Promise ? await result : result;
+			const people = await result;
 			allPeople = people;
 
 			// Create a map for quick lookup

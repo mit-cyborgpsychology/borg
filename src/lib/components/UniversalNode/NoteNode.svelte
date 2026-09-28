@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
 	import { Handle, Position } from '@xyflow/svelte';
 	import { Trash2, Pencil, Bold, Lock, Unlock, CheckCheck } from '@lucide/svelte';
 
@@ -70,13 +72,10 @@
 
 		data.nodeData = updatedNodeData;
 
-		const updateEvent = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: { nodeData: updatedNodeData }
-			}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: { nodeData: updatedNodeData }
 		});
-		document.dispatchEvent(updateEvent);
 	}
 
 	// Get background style based on selection and note style
@@ -137,18 +136,15 @@
 		};
 
 		// Dispatch update event to save the content to service
-		const event = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: {
-						...nodeData,
-						content: noteContent
-					}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: {
+					...nodeData,
+					content: noteContent
 				}
 			}
 		});
-		document.dispatchEvent(event);
 	}
 
 	function handleNoteBlur() {
@@ -174,14 +170,11 @@
 		event.stopPropagation();
 
 		// Dispatch edit event for settings panel
-		const editEvent = new CustomEvent('nodeEdit', {
-			detail: {
-				nodeId: id,
-				nodeData: nodeData,
-				templateType: data.templateType
-			}
+		canvasActions.nodeEdit({
+			nodeId: id,
+			nodeData: nodeData,
+			templateType: data.templateType
 		});
-		document.dispatchEvent(editEvent);
 	}
 
 	function handleDelete(event: MouseEvent) {
@@ -189,8 +182,7 @@
 
 		if (confirm('Are you sure you want to delete this note?')) {
 			// Dispatch a custom event to parent
-			const deleteEvent = new CustomEvent('nodeDelete', { detail: { nodeId: id } });
-			document.dispatchEvent(deleteEvent);
+			canvasActions.nodeDelete({ nodeId: id });
 		}
 	}
 
@@ -207,18 +199,15 @@
 		};
 
 		// Dispatch update event to save the font weight
-		const updateEvent = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: {
-						...nodeData,
-						fontWeight: newFontWeight
-					}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: {
+					...nodeData,
+					fontWeight: newFontWeight
 				}
 			}
 		});
-		document.dispatchEvent(updateEvent);
 	}
 
 	function toggleLock(event: MouseEvent) {
@@ -233,18 +222,15 @@
 		};
 
 		// Dispatch update event to save changes
-		const updateEvent = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: {
-						...nodeData,
-						locked: newLockState
-					}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: {
+					...nodeData,
+					locked: newLockState
 				}
 			}
 		});
-		document.dispatchEvent(updateEvent);
 	}
 
 	function startResize(event: MouseEvent) {
@@ -298,19 +284,16 @@
 		};
 
 		// Dispatch update event to save dimensions
-		const event = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: {
-						...nodeData,
-						width,
-						height
-					}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: {
+					...nodeData,
+					width,
+					height
 				}
 			}
 		});
-		document.dispatchEvent(event);
 	}
 </script>
 
@@ -387,7 +370,10 @@
 					<Pencil class="h-3 w-3" />
 				</button>
 				<button
-					onclick={(event) => { event.stopPropagation(); handleDelete(event); }}
+					onclick={(event) => {
+						event.stopPropagation();
+						handleDelete(event);
+					}}
 					aria-label="Delete note"
 					class="rounded p-1 text-gray-600 hover:bg-white/50 hover:text-red-600"
 				>

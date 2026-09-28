@@ -3,32 +3,22 @@ import {
 	signOut as firebaseSignOut,
 	onAuthStateChanged,
 	signInWithPopup,
+	type Auth,
 	type User
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, isEmulator } from '../../firebase/config';
+import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
+import type { IAuthService, AuthUser } from '../interfaces/IAuthService';
 
-export class FirebaseAuth {
-	private currentUser: User | null = null;
-	private authCallbacks: ((user: User | null) => void)[] = [];
-
-	constructor() {
-		onAuthStateChanged(auth, async (user) => {
-			this.currentUser = user;
-
-			if (user) {
-				// Create/update user document
-				await this.createUserDocument(user);
-			}
-
-			// Notify subscribers
-			this.authCallbacks.forEach((callback) => callback(user));
-		});
-	}
+export class FirebaseAuth implements IAuthService {
+	constructor(
+		private auth: Auth,
+		private db: Firestore,
+		private isEmulator: boolean
+	) {}
 
 	async signInWithGoogle(): Promise<{ user: User; isApproved: boolean }> {
 		const provider = new GoogleAuthProvider();
-		const result = await signInWithPopup(auth, provider);
+		const result = await signInWithPopup(this.auth, provider);
 
 		// Check if user is approved
 		const isApproved = await this.checkUserApproval(result.user.uid);
@@ -37,11 +27,11 @@ export class FirebaseAuth {
 	}
 
 	async signOut(): Promise<void> {
-		await firebaseSignOut(auth);
+		await firebaseSignOut(this.auth);
 	}
 
 	private async createUserDocument(user: User): Promise<void> {
-		const userRef = doc(db, 'users', user.uid);
+		const userRef = doc(this.db, 'users', user.uid);
 		const userDoc = await getDoc(userRef);
 
 		if (!userDoc.exists()) {
@@ -50,7 +40,7 @@ export class FirebaseAuth {
 				email: user.email || '',
 				photoUrl: user.photoURL || '',
 				createdAt: new Date(),
-				isApproved: isEmulator ? user.email?.startsWith('admin') : false, // Must be manually approved
+				isApproved: this.isEmulator ? user.email?.startsWith('admin') : false, // Must be manually approved
 				userType: 'member', // Default to member for new users
 				lastLoginAt: new Date()
 			});
@@ -75,26 +65,36 @@ export class FirebaseAuth {
 	}
 
 	async checkUserApproval(userId: string): Promise<boolean> {
-		const userRef = doc(db, 'users', userId);
+		const userRef = doc(this.db, 'users', userId);
 		const userDoc = await getDoc(userRef);
 		return userDoc.exists() ? userDoc.data()?.isApproved === true : false;
 	}
 
 	async getUserData(userId: string): Promise<any> {
-		const userRef = doc(db, 'users', userId);
+		const userRef = doc(this.db, 'users', userId);
 		const userDoc = await getDoc(userRef);
 		return userDoc.exists() ? userDoc.data() : null;
 	}
 
-	getCurrentUser(): User | null {
-		return this.currentUser;
-	}
-
-	onAuthStateChange(callback: (user: User | null) => void): () => void {
-		this.authCallbacks.push(callback);
+	onAuthStateChange(
+		callback: (user: AuthUser | null) => void,
+		onError?: (error: unknown) => void
+	): () => void {
+		let disposed = false;
+		let generation = 0;
+		const unsubscribe = onAuthStateChanged(this.auth, async (user) => {
+			const request = ++generation;
+			try {
+				if (user) await this.createUserDocument(user);
+				if (!disposed && request === generation) callback(user);
+			} catch (error) {
+				if (!disposed && request === generation) onError?.(error);
+			}
+		});
 		return () => {
-			const index = this.authCallbacks.indexOf(callback);
-			if (index > -1) this.authCallbacks.splice(index, 1);
+			disposed = true;
+			generation++;
+			unsubscribe();
 		};
 	}
 }

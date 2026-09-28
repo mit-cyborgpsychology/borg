@@ -1,6 +1,7 @@
 services:
   firebase:
     image: ghcr.io/dtinth/firebase-emulator-suite:main
+    command: ['npx', '--yes', 'firebase-tools@14.15.1', 'emulators:start', '--project', 'demo-borg']
     volumes:
       - ./firebase.emulator.docker.json:/project/firebase.json:ro
       - ./firestore.rules:/project/firestore.rules:ro

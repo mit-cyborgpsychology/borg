@@ -30,7 +30,7 @@ A visual project management and knowledge organization platform built with Svelt
 
 ### Prerequisites
 
-- Node.js 22
+- Node.js 22.18 or newer (the test runner uses native TypeScript support)
 - pnpm
 
 ### Installation
@@ -46,11 +46,11 @@ cp .env.example .env
 ### Development
 
 ```bash
-# Run Firebase emulators
-docker-compose up -d
+# Run Firebase emulators (Docker must be running)
+docker compose up -d
 
-# Start app
-pnpm dev
+# Start app against the local emulators
+VITE_FIREBASE_PROJECT_ID=demo-borg pnpm dev
 ```
 
 When using Firebase emulators, the fake Google Sign-In dialog will let you create fake accounts and sign in with any email address. Use an email starting with "admin" (e.g., `admin@example.com`) to automatically get admin permissions.
@@ -71,7 +71,32 @@ pnpm preview
 # Type checking
 pnpm check
 
+# Regression tests
+pnpm test
+
 # Linting and formatting
 pnpm lint
 pnpm format
 ```
+
+Application dataflow and ownership rules are documented in [ARCHITECTURE.md](ARCHITECTURE.md).
+Services are composed once per root layout and accessed through typed Svelte context.
+Feature state coordinates queries, while Firebase adapters handle persistence.
+The regression suite covers dataflow boundaries, stale responses, authentication races,
+subscription cleanup, and canvas persistence without Firebase credentials or emulators.
+
+### Local browser regression test
+
+Start Docker and the emulator, then run a separate development server:
+
+```bash
+docker compose up -d
+VITE_FIREBASE_PROJECT_ID=demo-borg VITE_FIREBASE_API_KEY=demo-key pnpm dev --host 127.0.0.1 --port 5179
+```
+
+In another terminal, run `pnpm test:browser`. The test uses installed Google Chrome
+on macOS; otherwise run `pnpm exec playwright install chromium` first or provide
+`BROWSER_EXECUTABLE_PATH`. It creates uniquely named test accounts and projects in
+`demo-borg`, blocks external traffic, and verifies rejected writes, form retry,
+authenticated tabs, canvas creation, and persistence after reload. It never clears
+existing emulator data. Outline and production presence are outside this local test.

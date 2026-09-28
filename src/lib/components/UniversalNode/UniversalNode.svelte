@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
 	import { Handle, Position } from '@xyflow/svelte';
 	import { getTemplate, type NodeTemplate } from '../../templates';
 	import NoteNode from './NoteNode.svelte';
@@ -59,14 +61,11 @@
 
 	function handleNodeClick() {
 		// Dispatch the edit event
-		const event = new CustomEvent('nodeEdit', {
-			detail: {
-				nodeId: id,
-				nodeData: nodeData,
-				templateType: data.templateType
-			}
+		canvasActions.nodeEdit({
+			nodeId: id,
+			nodeData: nodeData,
+			templateType: data.templateType
 		});
-		document.dispatchEvent(event);
 	}
 
 	function handleTitleSave(title: string) {
@@ -77,36 +76,29 @@
 		};
 
 		// Dispatch update event to save the title to service
-		const event = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: {
-						...nodeData,
-						title: title
-					}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: {
+					...nodeData,
+					title: title
 				}
 			}
 		});
-		document.dispatchEvent(event);
 	}
 
 	function handleDelete() {
 		// Dispatch a custom event to parent
-		const event = new CustomEvent('nodeDelete', { detail: { nodeId: id } });
-		document.dispatchEvent(event);
+		canvasActions.nodeDelete({ nodeId: id });
 	}
 
 	function handleTaskPillClick() {
 		// Dispatch event to open task sidebar at Canvas level
-		const customEvent = new CustomEvent('nodeTasksOpen', {
-			detail: {
-				nodeId: id,
-				nodeTitle: nodeData.title || 'Untitled',
-				tasks: tasks
-			}
+		canvasActions.nodeTasksOpen({
+			nodeId: id,
+			nodeTitle: nodeData.title || 'Untitled',
+			tasks: tasks
 		});
-		document.dispatchEvent(customEvent);
 	}
 </script>
 

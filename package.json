@@ -10,11 +10,13 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "node --test tests/*.test.mjs",
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",
 		"party:dev": "partykit dev",
 		"party:deploy": "partykit deploy",
-		"party:deploy:cf": "CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN partykit deploy --domain cursor.cyborglab.com"
+		"party:deploy:cf": "CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN partykit deploy --domain cursor.cyborglab.com",
+		"test:browser": "node tests/browser/smoke.mjs"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.5",
@@ -29,6 +31,7 @@
 		"eslint-config-prettier": "^10.0.1",
 		"eslint-plugin-svelte": "^3.0.0",
 		"globals": "^16.0.0",
+		"playwright": "^1.63.0",
 		"prettier": "^3.4.2",
 		"prettier-plugin-svelte": "^3.3.3",
 		"prettier-plugin-tailwindcss": "^0.6.11",

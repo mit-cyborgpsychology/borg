@@ -1,7 +1,10 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
+	import { getAppServices } from '$lib/app/context';
 	import type { Sticker } from '../../types/sticker';
-	import { stickerService } from '../../services/instances';
 
+	const { stickerService } = getAppServices();
 	let { sticker, category } = $props<{
 		sticker: Sticker;
 		category: string;
@@ -37,27 +40,33 @@
 	// Click handler to add sticker to canvas
 	function handleClick() {
 		if (!imageUrl) return;
-		document.dispatchEvent(new CustomEvent('addSticker', {
-			detail: { type: 'sticker', stickerUrl: imageUrl, category, filename: sticker.filename, name: sticker.name },
-			bubbles: true
-		}));
+		canvasActions.addSticker({
+			type: 'sticker',
+			stickerUrl: imageUrl,
+			category,
+			filename: sticker.filename,
+			name: sticker.name
+		});
 	}
 
 	// Drag-and-drop handlers
 	function handleDragStart(e: DragEvent) {
 		if (!imageUrl || !e.dataTransfer) return;
 		e.dataTransfer.effectAllowed = 'copy';
-		e.dataTransfer.setData('application/borg-sticker', JSON.stringify({
-			stickerUrl: imageUrl,
-			category,
-			filename: sticker.filename,
-			name: sticker.name
-		}));
+		e.dataTransfer.setData(
+			'application/borg-sticker',
+			JSON.stringify({
+				stickerUrl: imageUrl,
+				category,
+				filename: sticker.filename,
+				name: sticker.name
+			})
+		);
 	}
 </script>
 
 <div
-	class="sticker-item group relative cursor-grab hover:bg-gray-100 rounded-lg p-1 transition-colors"
+	class="sticker-item group relative cursor-grab rounded-lg p-1 transition-colors hover:bg-gray-100"
 	role="button"
 	tabindex="0"
 	aria-label="Add {sticker.name} sticker"
@@ -73,29 +82,39 @@
 >
 	{#if imageError}
 		<!-- Error placeholder -->
-		<div class="w-16 h-16 bg-red-50 border border-red-200 rounded-lg flex items-center justify-center">
+		<div
+			class="flex h-16 w-16 items-center justify-center rounded-lg border border-red-200 bg-red-50"
+		>
 			<span class="text-xs text-red-500">✗</span>
 		</div>
 	{:else if !imageUrl}
 		<!-- Loading URL placeholder -->
-		<div class="w-16 h-16 bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center">
-			<div class="w-4 h-4 border-2 border-gray-300 border-t-black rounded-full animate-spin"></div>
+		<div
+			class="flex h-16 w-16 items-center justify-center rounded-lg border border-gray-200 bg-gray-100"
+		>
+			<div class="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-black"></div>
 		</div>
 	{:else}
 		<!-- Image container with loading overlay -->
-		<div class="relative w-16 h-16">
+		<div class="relative h-16 w-16">
 			<!-- Loading spinner overlay (shown while image loads) -->
 			{#if !imageLoaded}
-				<div class="absolute inset-0 bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center z-10">
-					<div class="w-4 h-4 border-2 border-gray-300 border-t-black rounded-full animate-spin"></div>
+				<div
+					class="absolute inset-0 z-10 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-100"
+				>
+					<div
+						class="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-black"
+					></div>
 				</div>
 			{/if}
-			
+
 			<!-- Sticker image -->
 			<img
 				src={imageUrl}
 				alt=""
-				class="w-16 h-16 object-contain rounded-lg transition-all duration-200 group-hover:scale-105 {imageLoaded ? 'opacity-100' : 'opacity-0'}"
+				class="h-16 w-16 rounded-lg object-contain transition-all duration-200 group-hover:scale-105 {imageLoaded
+					? 'opacity-100'
+					: 'opacity-0'}"
 				onload={handleImageLoad}
 				onerror={handleImageError}
 				draggable="true"

@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
+	import { getAppServices } from '$lib/app/context';
 	import { Handle, Position } from '@xyflow/svelte';
 	import { CircleDashed, PencilRuler, CheckCircle, Shield } from '@lucide/svelte';
-	import { getPersonCached } from '../stores/peopleCache.svelte';
 	import type { Person } from '$lib/types/people';
+	const { getPersonCached } = getAppServices().peopleCache;
 
 	let { data, id } = $props<{ data: any; id: string }>();
 
@@ -16,7 +19,9 @@
 		if (!collaboratorIds || !Array.isArray(collaboratorIds)) return [];
 
 		return collaboratorIds
-			.filter((collaboratorId: unknown): collaboratorId is string => typeof collaboratorId === 'string')
+			.filter(
+				(collaboratorId: unknown): collaboratorId is string => typeof collaboratorId === 'string'
+			)
 			.map((collaboratorId: string): Person => {
 				const cached = getPersonCached(collaboratorId, nodeData.projectSlug);
 				if (cached) return cached;
@@ -52,14 +57,11 @@
 
 	function handleNodeClick() {
 		// Dispatch the edit event to navigate to project
-		const event = new CustomEvent('nodeEdit', {
-			detail: {
-				nodeId: id,
-				nodeData: nodeData,
-				templateType: data.templateType
-			}
+		canvasActions.nodeEdit({
+			nodeId: id,
+			nodeData: nodeData,
+			templateType: data.templateType
 		});
-		document.dispatchEvent(event);
 	}
 </script>
 

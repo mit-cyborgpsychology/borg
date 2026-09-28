@@ -10,23 +10,45 @@ export interface TaskSourceOptions {
 }
 
 export interface ITaskService {
-	getAllTasks(): Promise<TaskWithContext[]> | TaskWithContext[];
-	getProjectTasks(projectSlug: string): Promise<TaskWithContext[]> | TaskWithContext[];
-	getPersonTasks(personId: string): Promise<TaskWithContext[]> | TaskWithContext[];
-	getNodeTasks(nodeId: string, projectSlug?: string): Promise<Task[]> | Task[];
-	getNodePersonTaskCounts(nodeId: string, projectSlug?: string): Promise<PersonTaskCount[]> | PersonTaskCount[];
-	addTask(nodeId: string, task: Omit<Task, 'id' | 'createdAt'>, projectSlugOrOptions?: string | TaskSourceOptions): Promise<void> | void;
-	updateTask(nodeId: string, taskId: string, updates: Partial<Task>, projectSlug?: string): Promise<void> | void;
-	deleteTask(nodeId: string, taskId: string, projectSlug?: string): Promise<void> | void;
-	resolveTask(nodeId: string, taskId: string, projectSlug?: string): Promise<void> | void;
-	getActiveTasks(): Promise<TaskWithContext[]> | TaskWithContext[];
-	getResolvedTasks(): Promise<TaskWithContext[]> | TaskWithContext[];
-	getTaskCounts(projectSlug?: string): Promise<TaskCounts> | TaskCounts;
-	getPersonResolvedTasksLog?(personId: string, daysBack?: number): Promise<TaskWithContext[]> | TaskWithContext[];
-	getAllResolvedTasksLog?(daysBack?: number): Promise<TaskWithContext[]> | TaskWithContext[];
+	getAllTasks(): Promise<TaskWithContext[]>;
+	getProjectTasks(projectSlug: string): Promise<TaskWithContext[]>;
+	getPersonTasks(personId: string): Promise<TaskWithContext[]>;
+	getNodeTasks(nodeId: string, projectSlug?: string): Promise<Task[]>;
+	getNodePersonTaskCounts(nodeId: string, projectSlug?: string): Promise<PersonTaskCount[]>;
+	addTask(
+		nodeId: string,
+		task: Omit<Task, 'id' | 'createdAt'>,
+		projectSlugOrOptions?: string | TaskSourceOptions
+	): Promise<void>;
+	updateTask(
+		nodeId: string,
+		taskId: string,
+		updates: Partial<Task>,
+		projectSlug?: string
+	): Promise<void>;
+	deleteTask(nodeId: string, taskId: string, projectSlug?: string): Promise<void>;
+	resolveTask(nodeId: string, taskId: string, projectSlug?: string): Promise<void>;
+	getActiveTasks(): Promise<TaskWithContext[]>;
+	getResolvedTasks(): Promise<TaskWithContext[]>;
+	getTaskCounts(projectSlug?: string): Promise<TaskCounts>;
+	getPersonResolvedTasksLog(personId: string, daysBack?: number): Promise<TaskWithContext[]>;
+	getAllResolvedTasksLog?(daysBack?: number): Promise<TaskWithContext[]>;
 
 	// Real-time subscriptions (Firebase only)
-	subscribeToNodeTasks?(nodeId: string, callback: (tasks: Task[]) => void, projectSlug?: string, includeResolved?: boolean): () => void;
-	subscribeToPersonTasks?(personId: string, callback: (tasks: TaskWithContext[]) => void, projectSlug?: string): () => void;
-	subscribeToProjectTasks?(projectSlug: string, callback: (tasks: TaskWithContext[]) => void): () => void;
+	subscribeToNodeTasks?(
+		nodeId: string,
+		callback: (tasks: Task[]) => void,
+		projectSlug?: string,
+		includeResolved?: boolean
+	): () => void;
+	subscribeToPersonTasks?(
+		personId: string,
+		callback: (tasks: TaskWithContext[]) => void,
+		projectSlug?: string
+	): () => void;
+	subscribeToProjectTasks?(
+		projectSlug: string,
+		callback: (tasks: TaskWithContext[]) => void,
+		onError?: (error: unknown) => void
+	): () => void;
 }

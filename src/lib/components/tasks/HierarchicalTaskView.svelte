@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { getAppServices } from '$lib/app/context';
 	import { Calendar, CheckCircle, Trash2, RotateCcw, Loader2, ExternalLink } from '@lucide/svelte';
 	import type { TaskWithContext } from '../../types/task';
-	import { getPersonCached } from '../../stores/peopleCache.svelte';
+	const { getPersonCached } = getAppServices().peopleCache;
 
 	let {
 		tasks,
@@ -86,7 +87,8 @@
 
 		for (const task of tasks) {
 			const projectSlug = task.projectSlug || 'unknown';
-			const projectTitle = task.projectTitle || (task.sourceType === 'outline' ? 'Outline' : 'Unknown Project');
+			const projectTitle =
+				task.projectTitle || (task.sourceType === 'outline' ? 'Outline' : 'Unknown Project');
 			const nodeId = task.nodeId;
 			const nodeTitle = task.nodeTitle || 'Untitled';
 			const nodeType = task.nodeType;
@@ -237,107 +239,107 @@
 									{@const isLoading = loadingTasks.has(task.id)}
 									{@const overdue = task.dueDate && isOverdue(task.dueDate)}
 
-										<div
-											class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
-										>
-											<!-- Checkbox -->
-											<div class="flex items-center pt-0.5">
-												{#if showActions && !isResolved}
-													<button
-														onclick={(e) => {
-															e.stopPropagation();
-															handleResolveTask(task);
-														}}
-														class="rounded border border-zinc-500 p-0.5 hover:border-green-500 hover:bg-green-50 {isLoading
-															? 'opacity-50'
-															: ''}"
-														title="Mark as resolved"
-														disabled={isLoading}
-													>
-														{#if isLoading}
-															<Loader2 class="h-3 w-3 animate-spin text-zinc-500" />
-														{:else}
-															<CheckCircle class="h-3 w-3 text-transparent" />
-														{/if}
-													</button>
-												{:else if showActions && isResolved}
-													<button
-														onclick={(e) => {
-															e.stopPropagation();
-															handleReactivateTask(task);
-														}}
-														class="rounded border border-green-500 bg-green-500 p-0.5 hover:bg-green-600 {isLoading
-															? 'opacity-50'
-															: ''}"
-														title="Reactivate task"
-														disabled={isLoading}
-													>
-														{#if isLoading}
-															<Loader2 class="h-3 w-3 animate-spin text-white" />
-														{:else}
-															<CheckCircle class="h-3 w-3 text-white" />
-														{/if}
-													</button>
-												{:else}
-													<div class="h-4 w-4 rounded border border-zinc-300"></div>
+									<div
+										class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
+									>
+										<!-- Checkbox -->
+										<div class="flex items-center pt-0.5">
+											{#if showActions && !isResolved}
+												<button
+													onclick={(e) => {
+														e.stopPropagation();
+														handleResolveTask(task);
+													}}
+													class="rounded border border-zinc-500 p-0.5 hover:border-green-500 hover:bg-green-50 {isLoading
+														? 'opacity-50'
+														: ''}"
+													title="Mark as resolved"
+													disabled={isLoading}
+												>
+													{#if isLoading}
+														<Loader2 class="h-3 w-3 animate-spin text-zinc-500" />
+													{:else}
+														<CheckCircle class="h-3 w-3 text-transparent" />
+													{/if}
+												</button>
+											{:else if showActions && isResolved}
+												<button
+													onclick={(e) => {
+														e.stopPropagation();
+														handleReactivateTask(task);
+													}}
+													class="rounded border border-green-500 bg-green-500 p-0.5 hover:bg-green-600 {isLoading
+														? 'opacity-50'
+														: ''}"
+													title="Reactivate task"
+													disabled={isLoading}
+												>
+													{#if isLoading}
+														<Loader2 class="h-3 w-3 animate-spin text-white" />
+													{:else}
+														<CheckCircle class="h-3 w-3 text-white" />
+													{/if}
+												</button>
+											{:else}
+												<div class="h-4 w-4 rounded border border-zinc-300"></div>
+											{/if}
+										</div>
+
+										<!-- Task content -->
+										<div class="min-w-0 flex-1">
+											<div class="mb-1 flex items-center gap-2">
+												<span
+													class="text-sm text-zinc-900 {isResolved
+														? 'line-through opacity-60'
+														: ''}"
+												>
+													{task.title}
+												</span>
+												{#if person?.photoUrl}
+													<img
+														src={person.photoUrl}
+														alt={person.name || 'Assignee'}
+														class="h-5 w-5 rounded-full"
+														title={person.name || 'Unassigned'}
+														referrerpolicy="no-referrer"
+													/>
 												{/if}
 											</div>
 
-											<!-- Task content -->
-											<div class="min-w-0 flex-1">
-												<div class="mb-1 flex items-center gap-2">
-													<span
-														class="text-sm text-zinc-900 {isResolved
-															? 'line-through opacity-60'
-															: ''}"
-													>
-														{task.title}
-													</span>
-													{#if person?.photoUrl}
-														<img
-															src={person.photoUrl}
-															alt={person.name || 'Assignee'}
-															class="h-5 w-5 rounded-full"
-															title={person.name || 'Unassigned'}
-															referrerpolicy="no-referrer"
-														/>
-													{/if}
-												</div>
+											<!-- Task meta info -->
+											<div class="flex items-center gap-3 text-xs text-zinc-500">
+												{#if task.dueDate}
+													<div class="flex items-center gap-1 {overdue ? 'text-rose-500' : ''}">
+														<Calendar class="h-3 w-3" />
+														<span>Due {formatDate(task.dueDate)}</span>
+														{#if overdue && !isResolved}
+															<span class="text-rose-500">(Overdue)</span>
+														{/if}
+													</div>
+												{/if}
 
-												<!-- Task meta info -->
-												<div class="flex items-center gap-3 text-xs text-zinc-500">
-													{#if task.dueDate}
-														<div class="flex items-center gap-1 {overdue ? 'text-rose-500' : ''}">
-															<Calendar class="h-3 w-3" />
-															<span>Due {formatDate(task.dueDate)}</span>
-															{#if overdue && !isResolved}
-																<span class="text-rose-500">(Overdue)</span>
-															{/if}
-														</div>
-													{/if}
-
-													{#if task.notes}
-														<span class="text-xs text-zinc-600 italic">"{task.notes}"</span>
-													{/if}
-												</div>
+												{#if task.notes}
+													<span class="text-xs text-zinc-600 italic">"{task.notes}"</span>
+												{/if}
 											</div>
-
-											<!-- Delete button -->
-											{#if showActions}
-												<div
-													class="flex items-center opacity-0 transition-opacity group-hover:opacity-100"
-												>
-													<button
-														onclick={() => onDeleteTask?.(task)}
-														class="rounded p-1 hover:bg-rose-100"
-														title="Delete task"
-													>
-														<Trash2 class="h-4 w-4 text-zinc-400 hover:text-rose-600" />
-													</button>
-												</div>
-											{/if}
 										</div>
-									{/each}
+
+										<!-- Delete button -->
+										{#if showActions}
+											<div
+												class="flex items-center opacity-0 transition-opacity group-hover:opacity-100"
+											>
+												<button
+													onclick={() => onDeleteTask?.(task)}
+													class="rounded p-1 hover:bg-rose-100"
+													title="Delete task"
+												>
+													<Trash2 class="h-4 w-4 text-zinc-400 hover:text-rose-600" />
+												</button>
+											</div>
+										{/if}
+									</div>
+								{/each}
 							</div>
 						</div>
 					{/each}
@@ -371,101 +373,101 @@
 							{@const isLoading = loadingTasks.has(task.id)}
 							{@const overdue = task.dueDate && isOverdue(task.dueDate)}
 
-								<div
-									class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
-								>
-									<div class="flex items-center pt-0.5">
-										<div class="h-4 w-4 rounded border border-zinc-300 bg-green-500"></div>
+							<div
+								class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
+							>
+								<div class="flex items-center pt-0.5">
+									<div class="h-4 w-4 rounded border border-zinc-300 bg-green-500"></div>
+								</div>
+								<div class="min-w-0 flex-1">
+									<div class="mb-1 flex items-center gap-2">
+										<span class="text-sm text-zinc-900">
+											{task.title}
+										</span>
+										{#if person}
+											<img
+												src={person.photoUrl}
+												alt={person.name}
+												class="h-5 w-5 rounded-full border border-zinc-200"
+												referrerpolicy="no-referrer"
+												onerror={(e) =>
+													((e.currentTarget as HTMLImageElement).style.display = 'none')}
+											/>
+										{/if}
+										<!-- Project and Node Info -->
+										<span class="text-xs text-zinc-500">
+											{task.projectTitle} • {task.nodeTitle}
+										</span>
 									</div>
-									<div class="min-w-0 flex-1">
-										<div class="mb-1 flex items-center gap-2">
-											<span class="text-sm text-zinc-900">
-												{task.title}
-											</span>
-											{#if person}
-												<img
-													src={person.photoUrl}
-													alt={person.name}
-													class="h-5 w-5 rounded-full border border-zinc-200"
-													referrerpolicy="no-referrer"
-													onerror={(e) =>
-														((e.currentTarget as HTMLImageElement).style.display = 'none')}
-												/>
-											{/if}
-											<!-- Project and Node Info -->
-											<span class="text-xs text-zinc-500">
-												{task.projectTitle} • {task.nodeTitle}
-											</span>
-										</div>
-										<div class="flex items-center gap-3 text-xs text-zinc-500">
-											{#if person}
-												<span>{person.name}</span>
-											{/if}
-											{#if task.updatedAt}
-												<div class="flex items-center gap-1">
-													<Calendar class="h-3 w-3" />
-													<span>Resolved {formatDate(task.updatedAt)}</span>
-												</div>
-											{/if}
-											{#if task.dueDate}
-												<div class="flex items-center gap-1 {overdue ? 'text-red-600' : ''}">
-													<Calendar class="h-3 w-3" />
-													<span>Due {formatDate(task.dueDate)}</span>
-													{#if overdue}<span class="font-medium">(was overdue)</span>{/if}
-												</div>
-											{/if}
-											{#if task.notes}
-												<span class="text-xs text-zinc-600 italic">"{task.notes}"</span>
-											{/if}
-										</div>
+									<div class="flex items-center gap-3 text-xs text-zinc-500">
+										{#if person}
+											<span>{person.name}</span>
+										{/if}
+										{#if task.updatedAt}
+											<div class="flex items-center gap-1">
+												<Calendar class="h-3 w-3" />
+												<span>Resolved {formatDate(task.updatedAt)}</span>
+											</div>
+										{/if}
+										{#if task.dueDate}
+											<div class="flex items-center gap-1 {overdue ? 'text-red-600' : ''}">
+												<Calendar class="h-3 w-3" />
+												<span>Due {formatDate(task.dueDate)}</span>
+												{#if overdue}<span class="font-medium">(was overdue)</span>{/if}
+											</div>
+										{/if}
+										{#if task.notes}
+											<span class="text-xs text-zinc-600 italic">"{task.notes}"</span>
+										{/if}
 									</div>
-									<!-- Actions -->
-									{#if showActions}
-										<div
-											class="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100"
-										>
-											{#if isResolved}
-												<button
-													onclick={() => handleReactivateTask(task)}
-													disabled={isLoading}
-													class="rounded-md p-1.5 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
-													title="Reactivate task"
-												>
-													{#if isLoading}
-														<Loader2 class="h-4 w-4 animate-spin" />
-													{:else}
-														<RotateCcw class="h-4 w-4" />
-													{/if}
-												</button>
-											{:else}
-												<button
-													onclick={() => handleResolveTask(task)}
-													disabled={isLoading}
-													class="rounded-md p-1.5 text-green-600 hover:bg-green-50 disabled:opacity-50"
-													title="Mark as resolved"
-												>
-													{#if isLoading}
-														<Loader2 class="h-4 w-4 animate-spin" />
-													{:else}
-														<CheckCircle class="h-4 w-4" />
-													{/if}
-												</button>
-											{/if}
+								</div>
+								<!-- Actions -->
+								{#if showActions}
+									<div
+										class="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100"
+									>
+										{#if isResolved}
 											<button
-												onclick={() => handleDeleteTask(task)}
+												onclick={() => handleReactivateTask(task)}
 												disabled={isLoading}
-												class="rounded-md p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
-												title="Delete task"
+												class="rounded-md p-1.5 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+												title="Reactivate task"
 											>
 												{#if isLoading}
 													<Loader2 class="h-4 w-4 animate-spin" />
 												{:else}
-													<Trash2 class="h-4 w-4" />
+													<RotateCcw class="h-4 w-4" />
 												{/if}
 											</button>
-										</div>
-									{/if}
-								</div>
+										{:else}
+											<button
+												onclick={() => handleResolveTask(task)}
+												disabled={isLoading}
+												class="rounded-md p-1.5 text-green-600 hover:bg-green-50 disabled:opacity-50"
+												title="Mark as resolved"
+											>
+												{#if isLoading}
+													<Loader2 class="h-4 w-4 animate-spin" />
+												{:else}
+													<CheckCircle class="h-4 w-4" />
+												{/if}
+											</button>
+										{/if}
+										<button
+											onclick={() => handleDeleteTask(task)}
+											disabled={isLoading}
+											class="rounded-md p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+											title="Delete task"
+										>
+											{#if isLoading}
+												<Loader2 class="h-4 w-4 animate-spin" />
+											{:else}
+												<Trash2 class="h-4 w-4" />
+											{/if}
+										</button>
+									</div>
+								{/if}
+							</div>
 						{/each}
 					</div>
 				</div>
@@ -482,101 +484,101 @@
 							{@const isLoading = loadingTasks.has(task.id)}
 							{@const overdue = task.dueDate && isOverdue(task.dueDate)}
 
-								<div
-									class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
-								>
-									<div class="flex items-center pt-0.5">
-										<div class="h-4 w-4 rounded border border-zinc-300 bg-green-500"></div>
+							<div
+								class="group flex items-start gap-3 rounded-md px-3 py-2 transition-colors hover:bg-zinc-50"
+							>
+								<div class="flex items-center pt-0.5">
+									<div class="h-4 w-4 rounded border border-zinc-300 bg-green-500"></div>
+								</div>
+								<div class="min-w-0 flex-1">
+									<div class="mb-1 flex items-center gap-2">
+										<span class="text-sm text-zinc-900">
+											{task.title}
+										</span>
+										{#if person}
+											<img
+												src={person.photoUrl}
+												alt={person.name}
+												class="h-5 w-5 rounded-full border border-zinc-200"
+												referrerpolicy="no-referrer"
+												onerror={(e) =>
+													((e.currentTarget as HTMLImageElement).style.display = 'none')}
+											/>
+										{/if}
+										<!-- Project and Node Info -->
+										<span class="text-xs text-zinc-500">
+											{task.projectTitle} • {task.nodeTitle}
+										</span>
 									</div>
-									<div class="min-w-0 flex-1">
-										<div class="mb-1 flex items-center gap-2">
-											<span class="text-sm text-zinc-900">
-												{task.title}
-											</span>
-											{#if person}
-												<img
-													src={person.photoUrl}
-													alt={person.name}
-													class="h-5 w-5 rounded-full border border-zinc-200"
-													referrerpolicy="no-referrer"
-													onerror={(e) =>
-														((e.currentTarget as HTMLImageElement).style.display = 'none')}
-												/>
-											{/if}
-											<!-- Project and Node Info -->
-											<span class="text-xs text-zinc-500">
-												{task.projectTitle} • {task.nodeTitle}
-											</span>
-										</div>
-										<div class="flex items-center gap-3 text-xs text-zinc-500">
-											{#if person}
-												<span>{person.name}</span>
-											{/if}
-											{#if task.updatedAt}
-												<div class="flex items-center gap-1">
-													<Calendar class="h-3 w-3" />
-													<span>Resolved {formatDate(task.updatedAt)}</span>
-												</div>
-											{/if}
-											{#if task.dueDate}
-												<div class="flex items-center gap-1 {overdue ? 'text-red-600' : ''}">
-													<Calendar class="h-3 w-3" />
-													<span>Due {formatDate(task.dueDate)}</span>
-													{#if overdue}<span class="font-medium">(was overdue)</span>{/if}
-												</div>
-											{/if}
-											{#if task.notes}
-												<span class="text-xs text-zinc-600 italic">"{task.notes}"</span>
-											{/if}
-										</div>
+									<div class="flex items-center gap-3 text-xs text-zinc-500">
+										{#if person}
+											<span>{person.name}</span>
+										{/if}
+										{#if task.updatedAt}
+											<div class="flex items-center gap-1">
+												<Calendar class="h-3 w-3" />
+												<span>Resolved {formatDate(task.updatedAt)}</span>
+											</div>
+										{/if}
+										{#if task.dueDate}
+											<div class="flex items-center gap-1 {overdue ? 'text-red-600' : ''}">
+												<Calendar class="h-3 w-3" />
+												<span>Due {formatDate(task.dueDate)}</span>
+												{#if overdue}<span class="font-medium">(was overdue)</span>{/if}
+											</div>
+										{/if}
+										{#if task.notes}
+											<span class="text-xs text-zinc-600 italic">"{task.notes}"</span>
+										{/if}
 									</div>
-									<!-- Actions -->
-									{#if showActions}
-										<div
-											class="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100"
-										>
-											{#if isResolved}
-												<button
-													onclick={() => handleReactivateTask(task)}
-													disabled={isLoading}
-													class="rounded-md p-1.5 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
-													title="Reactivate task"
-												>
-													{#if isLoading}
-														<Loader2 class="h-4 w-4 animate-spin" />
-													{:else}
-														<RotateCcw class="h-4 w-4" />
-													{/if}
-												</button>
-											{:else}
-												<button
-													onclick={() => handleResolveTask(task)}
-													disabled={isLoading}
-													class="rounded-md p-1.5 text-green-600 hover:bg-green-50 disabled:opacity-50"
-													title="Mark as resolved"
-												>
-													{#if isLoading}
-														<Loader2 class="h-4 w-4 animate-spin" />
-													{:else}
-														<CheckCircle class="h-4 w-4" />
-													{/if}
-												</button>
-											{/if}
+								</div>
+								<!-- Actions -->
+								{#if showActions}
+									<div
+										class="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100"
+									>
+										{#if isResolved}
 											<button
-												onclick={() => handleDeleteTask(task)}
+												onclick={() => handleReactivateTask(task)}
 												disabled={isLoading}
-												class="rounded-md p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
-												title="Delete task"
+												class="rounded-md p-1.5 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+												title="Reactivate task"
 											>
 												{#if isLoading}
 													<Loader2 class="h-4 w-4 animate-spin" />
 												{:else}
-													<Trash2 class="h-4 w-4" />
+													<RotateCcw class="h-4 w-4" />
 												{/if}
 											</button>
-										</div>
-									{/if}
-								</div>
+										{:else}
+											<button
+												onclick={() => handleResolveTask(task)}
+												disabled={isLoading}
+												class="rounded-md p-1.5 text-green-600 hover:bg-green-50 disabled:opacity-50"
+												title="Mark as resolved"
+											>
+												{#if isLoading}
+													<Loader2 class="h-4 w-4 animate-spin" />
+												{:else}
+													<CheckCircle class="h-4 w-4" />
+												{/if}
+											</button>
+										{/if}
+										<button
+											onclick={() => handleDeleteTask(task)}
+											disabled={isLoading}
+											class="rounded-md p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+											title="Delete task"
+										>
+											{#if isLoading}
+												<Loader2 class="h-4 w-4 animate-spin" />
+											{:else}
+												<Trash2 class="h-4 w-4" />
+											{/if}
+										</button>
+									</div>
+								{/if}
+							</div>
 						{/each}
 					</div>
 				</div>

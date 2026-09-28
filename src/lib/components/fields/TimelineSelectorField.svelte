@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { FirebaseTimelineService } from '../../services/firebase/FirebaseTimelineService';
+	import { getAppServices } from '$lib/app/context';
 	import type { TemplateField } from '../../templates';
 	import AddTimelineEventModal from '../browser/AddTimelineEventModal.svelte';
 	import { Plus } from '@lucide/svelte';
 
+	const { createTimelineService } = getAppServices();
 	let {
 		field,
 		value = $bindable(),
@@ -19,7 +20,7 @@
 	}>();
 
 	// Services for synced data
-	const timelineService = new FirebaseTimelineService();
+	const timelineService = createTimelineService();
 
 	// State for timeline data
 	let allEvents = $state<any[]>([]);
@@ -141,7 +142,7 @@
 	async function loadEvents() {
 		if (timelineService.getEventsSortedByDate) {
 			const result = timelineService.getEventsSortedByDate();
-			const events = result instanceof Promise ? await result : result;
+			const events = await result;
 			allEvents = events;
 
 			// Create a map for quick lookup
@@ -153,13 +154,13 @@
 
 	async function handleAddEvent(templateType: string, eventData: Record<string, any>) {
 		const result = timelineService.addEvent(templateType, eventData);
-		if (result instanceof Promise) await result;
+		await result;
 		await loadEvents(); // Reload events to get the new one
 		showAddModal = false;
 
 		// If this was successful, find the newly created event and select it
 		const updatedResult = timelineService.getEventsSortedByDate();
-		const updatedEvents = updatedResult instanceof Promise ? await updatedResult : updatedResult;
+		const updatedEvents = await updatedResult;
 		const newEvent = updatedEvents.find(
 			(e) =>
 				e.title === eventData.title &&

@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { createCommand } from '$lib/state/command';
+	import { onDestroy } from 'svelte';
+	const editCommand = createCommand({ queue: true });
+	onDestroy(() => editCommand.dispose());
+	import { provideCanvasActions, type CanvasPayloads } from '$lib/features/canvas/context';
+	import AsyncStatus from '../AsyncStatus.svelte';
+	import { getAppServices } from '$lib/app/context';
+	import { onMount, untrack } from 'svelte';
+	import { buildProjectCanvasNodes } from '../../features/projects/projectCanvasNodes';
+	import { connectCanvas } from '../../features/canvas/connectCanvas';
 	import { Network, Grid, Search } from '@lucide/svelte';
 	import {
 		SvelteFlow,
@@ -20,26 +29,22 @@
 	import Toolbar from '../Toolbar.svelte';
 	import EditPanel from '../EditPanel.svelte';
 	import StickerPanel from '../stickers/StickerPanel.svelte';
-	import { FirebaseNodesService } from '../../services/firebase/FirebaseNodesService';
-	import { projectsService } from '../../services/instances';
 	import type { INodesService } from '../../services/interfaces';
 	import type { Project } from '$lib/types/project';
 	import { getTemplate } from '../../templates';
-	import { authStore } from '../../stores/authStore';
 	import {
 		updateMatchingNodes as updateMatches,
 		navigateToMatch,
 		nextMatch as goToNextMatch,
 		previousMatch as goToPreviousMatch
 	} from '../../utils/canvasSearch';
-	import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-	import { app } from '../../firebase/config';
-	import { compressImageFile } from '../../utils/resizeImage';
 	import { ProjectStore } from '../../stores/ProjectStore.svelte';
 	import { setProjectStoreContext } from '../../stores/projectStoreContext';
 	import '@xyflow/svelte/dist/style.css';
 	import '../svelteflow.css';
 
+	const { authStore, projectsService, createNodesService, imageService, taskService } =
+		getAppServices();
 	let {
 		projects,
 		onProjectClick,
@@ -64,7 +69,7 @@
 	// from any real project — its own universal nodes need a ProjectStore in
 	// context too, same as Canvas.svelte, so UniversalNode can read task data
 	// without opening its own per-node Firestore listener.
-	const projectStore = new ProjectStore();
+	const projectStore = new ProjectStore(taskService);
 	setProjectStoreContext(projectStore);
 
 	$effect(() => {
@@ -76,6 +81,7 @@
 	let canvasEdges = $state<Edge[]>([]);
 	let nodesService: INodesService;
 	let mounted = $state(false);
+	let canvasError = $state<string | null>(null);
 
 	// Svelte Flow helpers - will be initialized after SvelteFlow is ready
 	let getViewport: any;
@@ -85,7 +91,6 @@
 
 	// Current working nodes (mutable for SvelteFlow)
 	let workingNodes = $state<Node[]>([]);
-	let lastProjectsLength = 0;
 
 	// Handle lock state reactively - set draggable property based on lock state
 	$effect(() => {
@@ -241,140 +246,30 @@
 	}
 
 	function updateWorkingNodes() {
-		if (!mounted) {
-			workingNodes = canvasNodes.slice();
-			return;
-		}
+		workingNodes = buildProjectCanvasNodes(projects, canvasNodes, workingNodes);
+	}
 
-		if (!projects.length) {
-			workingNodes = canvasNodes.slice();
-			return;
-		}
-
-		// Create project nodes from projects array (exclude project-node)
-		const projectNodes: Node[] = projects
-			.filter((project: any) => project.id !== 'project-canvas')
-			.map((project: any, index: number) => ({
-				id: `project-${project.id}`,
-				type: 'projectCanvas',
-				position: getProjectNodePosition(project.id, index),
-				data: {
-					templateType: 'project',
-					nodeData: {
-						title: project.title,
-						status: project.status || undefined,
-						collaborators: project.collaborators || [],
-						website: project.website || '',
-						projectId: project.id,
-						projectSlug: project.slug
-					}
-				},
-				draggable: true
-			}));
-
-		// Get non-project canvas nodes (these maintain their own ordering)
-		const nonProjectCanvasNodes = canvasNodes.filter((node) => !node.id.startsWith('project-'));
-
-		// Preserve existing order of workingNodes when updating
-		const existingWorkingNodes = new Map(workingNodes.map((n) => [n.id, n]));
-		const existingProjectNodeOrder = workingNodes.filter((node) => node.id.startsWith('project-'));
-
-		// Update existing project nodes with fresh data while preserving order
-		const orderedUpdatedProjectNodes: Node[] = [];
-		// Plain local bookkeeping inside a function body, never read reactively.
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity
-		const processedIds = new Set<string>();
-
-		// First, add existing project nodes in their current order (if they still exist in projects)
-		for (const existingNode of existingProjectNodeOrder) {
-			const matchingProjectNode = projectNodes.find((pNode) => pNode.id === existingNode.id);
-			if (matchingProjectNode) {
-				// Update with fresh data but keep position from existing
-				orderedUpdatedProjectNodes.push({
-					...matchingProjectNode,
-					position: existingNode.position
-				});
-				processedIds.add(existingNode.id);
+	onMount(() => {
+		nodesService = createNodesService('project-canvas', 'project-canvas');
+		const disconnect = connectCanvas(async () => nodesService, {
+			nodes: (nodes) => {
+				canvasNodes = nodes;
+				mounted = true;
+				updateWorkingNodes();
+			},
+			edges: (edges) => {
+				canvasEdges = edges;
+			},
+			error: (error) => {
+				canvasError = 'Could not load the canvas. Please reload to try again.';
+				console.error('Failed to load project canvas:', error);
 			}
-		}
-
-		// Then, add any new project nodes that weren't in the existing order
-		for (const pNode of projectNodes) {
-			if (!processedIds.has(pNode.id)) {
-				orderedUpdatedProjectNodes.push(pNode);
-			}
-		}
-
-		// Sort canvas nodes by Firebase's updatedAt timestamp (most recent last = on top)
-		// updatedAt is extra metadata FirebaseNodesService.subscribeToNodes attaches
-		// beyond the base xyflow Node shape, not part of its declared type.
-		const sortedCanvasNodes = nonProjectCanvasNodes.sort((a, b) => {
-			const aUpdatedAt = (a as Node & { updatedAt?: { toMillis?: () => number } }).updatedAt;
-			const bUpdatedAt = (b as Node & { updatedAt?: { toMillis?: () => number } }).updatedAt;
-			const aTime = aUpdatedAt?.toMillis ? aUpdatedAt.toMillis() : 0;
-			const bTime = bUpdatedAt?.toMillis ? bUpdatedAt.toMillis() : 0;
-			return aTime - bTime;
 		});
-
-		workingNodes = [...orderedUpdatedProjectNodes, ...sortedCanvasNodes];
-	}
-
-	function getProjectNodePosition(projectId: string, defaultIndex: number) {
-		// Try to find existing position from canvas nodes
-		const existingNode = canvasNodes.find((node) => node.id === `project-${projectId}`);
-		if (existingNode?.position) {
-			return existingNode.position;
-		}
-
-		// Default grid position
-		return {
-			x: 150 + (defaultIndex % 4) * 280,
-			y: 150 + Math.floor(defaultIndex / 4) * 220
+		return () => {
+			mounted = false;
+			disconnect();
+			clearTimeout(viewportSaveTimeout);
 		};
-	}
-
-	onMount(async () => {
-		try {
-			// Initialize service
-			nodesService = new FirebaseNodesService(
-				'project-canvas',
-				(nodes) => {
-					canvasNodes = nodes;
-				},
-				() => canvasNodes,
-				(edges) => {
-					canvasEdges = edges;
-				},
-				() => canvasEdges,
-				'project-canvas'
-			);
-
-			// Load initial canvas data (non-project nodes and positions)
-			const [initialNodes, initialEdges] = await Promise.all([
-				Promise.resolve(nodesService.getNodes()),
-				Promise.resolve(nodesService.getEdges())
-			]);
-
-			canvasNodes = Array.isArray(initialNodes) ? initialNodes : [];
-			canvasEdges = Array.isArray(initialEdges) ? initialEdges : [];
-
-			// Set up subscriptions for canvas nodes only
-			if (nodesService.subscribeToNodes && nodesService.subscribeToEdges) {
-				nodesService.subscribeToNodes((nodes) => {
-					canvasNodes = nodes;
-					updateWorkingNodes();
-				});
-
-				nodesService.subscribeToEdges((edges) => {
-					canvasEdges = edges;
-				});
-			}
-
-			mounted = true;
-			updateWorkingNodes();
-		} catch (error) {
-			console.error('Failed to initialize ProjectsCanvas:', error);
-		}
 	});
 
 	// Initialize Svelte Flow helpers after SvelteFlow is ready
@@ -468,9 +363,11 @@
 					);
 					// Save only the dragged node - Firebase will set updatedAt for ordering
 					await nodesService.saveBatch([draggedNode], []);
+					canvasError = null;
 				}
 			}
 		} catch (error) {
+			canvasError = 'Could not save this position. Move the node again to retry.';
 			console.error('Failed to save node positions:', error);
 		}
 	}
@@ -490,91 +387,30 @@
 
 	// Check for projects changes
 	$effect(() => {
-		if (mounted && projects.length !== lastProjectsLength) {
-			lastProjectsLength = projects.length;
-			updateWorkingNodes();
+		// Track metadata changes, not just the number of projects. Avoid tracking
+		// workingNodes, which this reconciliation replaces.
+		projects;
+		if (mounted) untrack(updateWorkingNodes);
+	});
+
+	const handleNodeEdit = (payload: CanvasPayloads['nodeEdit']) => {
+		const { nodeId, nodeData, templateType } = payload;
+
+		// For project nodes, navigate to project
+		if (nodeData?.projectSlug) {
+			onProjectClick(nodeData.projectSlug);
+			return;
 		}
-	});
 
-	// Handle node events
-	$effect(() => {
-		if (!mounted) return;
+		// For other nodes (like post-it notes), show edit panel
+		editNodeId = nodeId;
+		editNodeData = nodeData;
+		editTemplateType = templateType;
+		showEditPanel = true;
+	};
 
-		const handleNodeEdit = (event: Event) => {
-			const customEvent = event as CustomEvent;
-			const { nodeId, nodeData, templateType } = customEvent.detail;
-
-			// For project nodes, navigate to project
-			if (nodeData?.projectSlug) {
-				onProjectClick(nodeData.projectSlug);
-				return;
-			}
-
-			// For other nodes (like post-it notes), show edit panel
-			editNodeId = nodeId;
-			editNodeData = nodeData;
-			editTemplateType = templateType;
-			showEditPanel = true;
-		};
-
-		const handleNodeDelete = async (event: Event) => {
-			const customEvent = event as CustomEvent;
-			const { nodeId } = customEvent.detail;
-
-			// Don't allow deleting project nodes
-			if (nodeId?.startsWith('project-')) {
-				alert('Project nodes cannot be deleted as they sync with workspace metadata.');
-				return;
-			}
-
-			if (nodeId && nodesService) {
-				try {
-					await nodesService.deleteNode(nodeId);
-				} catch (error) {
-					console.error('Failed to delete node:', error);
-				}
-			}
-		};
-
-		const handleNodeUpdate = async (event: Event) => {
-			const customEvent = event as CustomEvent;
-			const { nodeId, data } = customEvent.detail;
-
-			if (nodeId && nodesService && data) {
-				try {
-					await nodesService.updateNode(nodeId, data);
-				} catch (error) {
-					console.error('Failed to update node:', error);
-				}
-			}
-		};
-
-		const handleAddStickerEvent = (event: Event) => {
-			const customEvent = event as CustomEvent;
-			handleAddSticker(customEvent);
-		};
-
-		document.addEventListener('nodeEdit', handleNodeEdit);
-		document.addEventListener('nodeDelete', handleNodeDelete);
-		document.addEventListener('nodeUpdate', handleNodeUpdate);
-		document.addEventListener('addSticker', handleAddStickerEvent);
-
-		return () => {
-			document.removeEventListener('nodeEdit', handleNodeEdit);
-			document.removeEventListener('nodeDelete', handleNodeDelete);
-			document.removeEventListener('nodeUpdate', handleNodeUpdate);
-			document.removeEventListener('addSticker', handleAddStickerEvent);
-		};
-	});
-
-	function handleEditPanelSave(nodeId: string, data: any) {
-		console.log('ProjectsCanvas.handleEditPanelSave called:', { nodeId, data });
-		nodesService.updateNode(nodeId, data);
-		showEditPanel = false;
-	}
-
-	function handleEditPanelDelete(nodeId: string) {
-		console.log('ProjectsCanvas.handleEditPanelDelete called for:', nodeId);
+	const handleNodeDelete = async (payload: CanvasPayloads['nodeDelete']) => {
+		const { nodeId } = payload;
 
 		// Don't allow deleting project nodes
 		if (nodeId?.startsWith('project-')) {
@@ -582,13 +418,51 @@
 			return;
 		}
 
-		try {
-			nodesService.deleteNode(nodeId);
-			showEditPanel = false;
-		} catch (error) {
-			console.error('Failed to delete node:', error);
-			alert('Failed to delete node. Check console for details.');
+		if (nodeId && nodesService) {
+			try {
+				await nodesService.deleteNode(nodeId);
+			} catch (error) {
+				console.error('Failed to delete node:', error);
+			}
 		}
+	};
+
+	const handleNodeUpdate = async (payload: CanvasPayloads['nodeUpdate']) => {
+		const { nodeId, data } = payload;
+
+		if (nodeId && nodesService && data) {
+			try {
+				await nodesService.updateNode(nodeId, data);
+			} catch (error) {
+				console.error('Failed to update node:', error);
+			}
+		}
+	};
+
+	const handleAddStickerEvent = (payload: CanvasPayloads['addSticker']) => {
+		void handleAddSticker(payload);
+	};
+
+	provideCanvasActions({
+		nodeEdit: handleNodeEdit,
+		nodeDelete: handleNodeDelete,
+		nodeUpdate: handleNodeUpdate,
+		addSticker: handleAddStickerEvent,
+		nodeTasksOpen: () => {},
+		addTask: () => {}
+	});
+
+	async function handleEditPanelSave(nodeId: string, data: any) {
+		console.log('ProjectsCanvas.handleEditPanelSave called:', { nodeId, data });
+		const result = await editCommand.run(() => nodesService.updateNode(nodeId, data));
+		if (!result.ok) return;
+		showEditPanel = false;
+	}
+
+	async function handleEditPanelDelete(nodeId: string) {
+		if (nodeId.startsWith('project-')) return;
+		const result = await editCommand.run(() => nodesService.deleteNode(nodeId));
+		if (result.ok) showEditPanel = false;
 	}
 
 	// ── Canvas drag-and-drop ─────────────────────────────────────────────────
@@ -657,7 +531,6 @@
 		if (files.length === 0) return;
 
 		canvasUploading = true;
-		const storage = getStorage(app);
 
 		for (const file of files) {
 			try {
@@ -667,11 +540,7 @@
 				const newNode = await nodesService.addNode('image', position);
 				if (!newNode?.id) continue;
 
-				const compressed = await compressImageFile(file);
-				const timestamp = Date.now();
-				const storageRef = ref(storage, `images/${newNode.id}/${timestamp}_${file.name}`);
-				const snapshot = await uploadBytes(storageRef, compressed);
-				const downloadURL = await getDownloadURL(snapshot.ref);
+				const downloadURL = await imageService.uploadImage(newNode.id, file);
 
 				await nodesService.updateNode(newNode.id, {
 					nodeData: { imageUrl: downloadURL }
@@ -692,11 +561,11 @@
 		showStickerPanel = false;
 	}
 
-	async function handleAddSticker(event: CustomEvent) {
+	async function handleAddSticker(payload: CanvasPayloads['addSticker']) {
 		if (!nodesService) return;
 
 		try {
-			const stickerData = event.detail;
+			const stickerData = payload;
 
 			if (stickerData.type === 'sticker') {
 				// Create sticker at center of viewport with some randomization
@@ -845,6 +714,12 @@
 	<div class="flex h-full w-full bg-zinc-950">
 		<!-- Canvas -->
 		<div class="relative flex-1">
+			{#if canvasError}<div
+					role="alert"
+					class="absolute top-16 left-3 z-50 rounded border border-red-300 bg-white p-3 text-sm text-red-800"
+				>
+					{canvasError}
+				</div>{/if}
 			<!-- Floating Toolbar -->
 			<Toolbar
 				view="projects"
@@ -1024,6 +899,7 @@
 		<!-- Edit Sidebar -->
 		{#if showEditPanel}
 			<EditPanel
+				error={$editCommand.error}
 				nodeId={editNodeId}
 				nodeData={editNodeData}
 				templateType={editTemplateType}

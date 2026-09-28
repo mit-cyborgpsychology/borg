@@ -34,3 +34,4 @@ firestore-debug.log
 # Misc.
 src/lib/data
 scripts
+dump

@@ -1,22 +1,23 @@
-import { get } from 'svelte/store';
 import type { IOutlineService, OutlineDoc, OutlineDocSummary } from './interfaces/IOutlineService';
-import { authStore } from '../stores/authStore';
-import { projectsService } from './instances';
-
-async function authHeader(): Promise<Record<string, string>> {
-	const user = get(authStore).user;
-	if (!user) {
-		throw new Error('Must be signed in to use the Outline integration');
-	}
-	const idToken = await user.getIdToken();
-	return { Authorization: `Bearer ${idToken}` };
-}
+import type { IProjectsService } from './interfaces/IProjectsService';
+import type { ReadSession } from './interfaces/Session';
 
 export class OutlineService implements IOutlineService {
-	async createDoc(projectSlug: string, title: string): Promise<OutlineDoc> {
-		const headers = await authHeader();
+	constructor(
+		private projectsService: IProjectsService,
+		private readSession: ReadSession
+	) {}
 
-		const project = await projectsService.getProject(projectSlug);
+	private async authHeader(): Promise<Record<string, string>> {
+		const user = this.readSession().user;
+		if (!user) throw new Error('Must be signed in to use the Outline integration');
+		return { Authorization: `Bearer ${await user.getIdToken()}` };
+	}
+
+	async createDoc(projectSlug: string, title: string): Promise<OutlineDoc> {
+		const headers = await this.authHeader();
+
+		const project = await this.projectsService.getProject(projectSlug);
 		if (!project) {
 			throw new Error(`Project not found: ${projectSlug}`);
 		}
@@ -43,7 +44,7 @@ export class OutlineService implements IOutlineService {
 
 		// Persist the collection id on the project the first time it's created
 		if (!project.outlineCollectionId && result.collectionId) {
-			await projectsService.updateProject(projectSlug, {
+			await this.projectsService.updateProject(projectSlug, {
 				outlineCollectionId: result.collectionId
 			});
 		}
@@ -52,7 +53,7 @@ export class OutlineService implements IOutlineService {
 	}
 
 	async searchDocs(query: string): Promise<OutlineDocSummary[]> {
-		const headers = await authHeader();
+		const headers = await this.authHeader();
 		const res = await fetch(`/api/outline/search?q=${encodeURIComponent(query)}`, { headers });
 		if (!res.ok) {
 			throw new Error(`Failed to search Outline docs: ${await res.text()}`);
@@ -63,7 +64,7 @@ export class OutlineService implements IOutlineService {
 
 	async listDocs(collectionIds: string[]): Promise<OutlineDocSummary[]> {
 		if (collectionIds.length === 0) return [];
-		const headers = await authHeader();
+		const headers = await this.authHeader();
 		const params = new URLSearchParams();
 		for (const id of collectionIds) params.append('collectionId', id);
 		const res = await fetch(`/api/outline/search?${params.toString()}`, { headers });

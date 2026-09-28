@@ -1,23 +1,27 @@
-import { 
-	collection, 
-	addDoc, 
-	deleteDoc, 
-	getDocs, 
+import {
+	collection,
+	addDoc,
+	deleteDoc,
+	getDocs,
 	getDoc,
-	query, 
-	where, 
-	orderBy, 
+	query,
+	where,
+	orderBy,
 	onSnapshot,
 	updateDoc,
 	doc,
 	writeBatch,
-	type Unsubscribe 
+	type Unsubscribe
 } from 'firebase/firestore';
-import { db } from '../../firebase/config';
-import type { Task, TaskWithContext, TaskCounts, PersonTaskCount, TaskSourceType } from '../../types/task';
+import type { Firestore } from 'firebase/firestore';
+import type {
+	Task,
+	TaskWithContext,
+	TaskCounts,
+	PersonTaskCount,
+	TaskSourceType
+} from '../../types/task';
 import type { ITaskService, TaskSourceOptions } from '../interfaces';
-import { get } from 'svelte/store';
-import { authStore } from '../../stores/authStore';
 
 export interface StoredTask {
 	id: string;
@@ -76,44 +80,49 @@ function describeUpdateForOutline(updates: Partial<Task>): string | null {
 	return '✏️ Task details updated in Borg.';
 }
 
+import type { ReadSession } from '../interfaces/Session';
 export class FirebaseTaskService implements ITaskService {
+	constructor(
+		private db: Firestore,
+		private readSession: ReadSession
+	) {}
 	async getAllTasks(): Promise<TaskWithContext[]> {
 		const q = query(
-			collection(db, 'tasks'),
+			collection(this.db, 'tasks'),
 			where('status', 'in', ['active', null]),
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map(doc => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
 	}
 
 	async getProjectTasks(projectSlug: string): Promise<TaskWithContext[]> {
 		const q = query(
-			collection(db, 'tasks'),
+			collection(this.db, 'tasks'),
 			where('projectSlug', '==', projectSlug),
 			where('status', 'in', ['active', null]),
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map(doc => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
 	}
 
 	async getPersonTasks(personId: string): Promise<TaskWithContext[]> {
 		const q = query(
-			collection(db, 'tasks'),
+			collection(this.db, 'tasks'),
 			where('assignee', '==', personId),
 			where('status', 'in', ['active', null]),
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map(doc => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
 	}
 
 	async getNodeTasks(nodeId: string, projectSlug?: string): Promise<Task[]> {
 		let q;
 		if (projectSlug) {
 			q = query(
-				collection(db, 'tasks'),
+				collection(this.db, 'tasks'),
 				where('projectSlug', '==', projectSlug),
 				where('nodeId', '==', nodeId),
 				where('status', 'in', ['active', null]),
@@ -121,7 +130,7 @@ export class FirebaseTaskService implements ITaskService {
 			);
 		} else {
 			q = query(
-				collection(db, 'tasks'),
+				collection(this.db, 'tasks'),
 				where('nodeId', '==', nodeId),
 				where('status', 'in', ['active', null]),
 				orderBy('createdAt', 'desc')
@@ -129,7 +138,7 @@ export class FirebaseTaskService implements ITaskService {
 		}
 
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map(doc => {
+		return snapshot.docs.map((doc) => {
 			const data = doc.data() as StoredTask;
 			return {
 				id: data.id,
@@ -146,7 +155,7 @@ export class FirebaseTaskService implements ITaskService {
 	async getNodePersonTaskCounts(nodeId: string, projectSlug?: string): Promise<PersonTaskCount[]> {
 		const tasks = await this.getNodeTasks(nodeId, projectSlug);
 		const counts = new Map<string, number>();
-		
+
 		tasks.forEach((task) => {
 			counts.set(task.assignee, (counts.get(task.assignee) || 0) + 1);
 		});
@@ -157,7 +166,11 @@ export class FirebaseTaskService implements ITaskService {
 		}));
 	}
 
-	async addTask(nodeId: string, task: Omit<Task, 'id' | 'createdAt'>, projectSlugOrOptions?: string | TaskSourceOptions): Promise<void> {
+	async addTask(
+		nodeId: string,
+		task: Omit<Task, 'id' | 'createdAt'>,
+		projectSlugOrOptions?: string | TaskSourceOptions
+	): Promise<void> {
 		// Parse options - support both old string format and new options format
 		let options: TaskSourceOptions = {};
 		if (typeof projectSlugOrOptions === 'string') {
@@ -191,10 +204,10 @@ export class FirebaseTaskService implements ITaskService {
 				// Outline doc-specific fields
 				outlineDocId: options.outlineDocId,
 				outlineDocTitle: options.outlineDocTitle || 'Untitled Doc',
-				createdBy: get(authStore).user?.uid || 'anonymous'
+				createdBy: this.readSession().user?.uid || 'anonymous'
 			};
 
-			const docRef = await addDoc(collection(db, 'tasks'), storedTask);
+			const docRef = await addDoc(collection(this.db, 'tasks'), storedTask);
 			await updateDoc(docRef, { id: docRef.id });
 			return;
 		}
@@ -207,7 +220,7 @@ export class FirebaseTaskService implements ITaskService {
 
 		// We'll need project and node context - this would typically come from the calling component
 		// For now, we'll need to fetch project info
-		const projectQuery = query(collection(db, 'projects'), where('slug', '==', projectSlug));
+		const projectQuery = query(collection(this.db, 'projects'), where('slug', '==', projectSlug));
 		const projectSnapshot = await getDocs(projectQuery);
 
 		if (projectSnapshot.empty) {
@@ -215,12 +228,16 @@ export class FirebaseTaskService implements ITaskService {
 		}
 
 		const projectData = projectSnapshot.docs[0].data();
-		const project = { id: projectSnapshot.docs[0].id, title: projectData.title || 'Untitled Project', ...projectData };
+		const project = {
+			id: projectSnapshot.docs[0].id,
+			title: projectData.title || 'Untitled Project',
+			...projectData
+		};
 
 		// Get node info - use document ID directly instead of querying by field
 		let nodeData = null;
 		try {
-			const nodeDocRef = doc(db, 'projects', project.id, 'nodes', nodeId);
+			const nodeDocRef = doc(this.db, 'projects', project.id, 'nodes', nodeId);
 			const nodeSnapshot = await getDoc(nodeDocRef);
 			nodeData = nodeSnapshot.exists() ? nodeSnapshot.data() : null;
 		} catch (error) {
@@ -247,16 +264,21 @@ export class FirebaseTaskService implements ITaskService {
 			projectSlug: projectSlug,
 			nodeId: nodeId,
 			nodeType: nodeType,
-			createdBy: get(authStore).user?.uid || 'anonymous'
+			createdBy: this.readSession().user?.uid || 'anonymous'
 		};
 
-		const docRef = await addDoc(collection(db, 'tasks'), storedTask);
+		const docRef = await addDoc(collection(this.db, 'tasks'), storedTask);
 		// Update the document with its own ID
 		await updateDoc(docRef, { id: docRef.id });
 	}
 
-	async updateTask(nodeId: string, taskId: string, updates: Partial<Task>, projectSlug?: string): Promise<void> {
-		const q = query(collection(db, 'tasks'), where('id', '==', taskId));
+	async updateTask(
+		nodeId: string,
+		taskId: string,
+		updates: Partial<Task>,
+		projectSlug?: string
+	): Promise<void> {
+		const q = query(collection(this.db, 'tasks'), where('id', '==', taskId));
 		const snapshot = await getDocs(q);
 
 		if (snapshot.empty) {
@@ -284,7 +306,7 @@ export class FirebaseTaskService implements ITaskService {
 		}
 
 		const q = query(
-			collection(db, 'tasks'),
+			collection(this.db, 'tasks'),
 			where('id', '==', taskId),
 			where('nodeId', '==', nodeId)
 		);
@@ -306,7 +328,7 @@ export class FirebaseTaskService implements ITaskService {
 
 		(async () => {
 			try {
-				const user = get(authStore).user;
+				const user = this.readSession().user;
 				const idToken = await user?.getIdToken();
 				await fetch('/api/outline/task-events', {
 					method: 'POST',
@@ -336,39 +358,42 @@ export class FirebaseTaskService implements ITaskService {
 
 	async getResolvedTasks(): Promise<TaskWithContext[]> {
 		const q = query(
-			collection(db, 'tasks'),
+			collection(this.db, 'tasks'),
 			where('status', '==', 'resolved'),
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map(doc => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
 	}
 
-	async getPersonResolvedTasksLog(personId: string, daysBack: number = 30): Promise<TaskWithContext[]> {
+	async getPersonResolvedTasksLog(
+		personId: string,
+		daysBack: number = 30
+	): Promise<TaskWithContext[]> {
 		const cutoffDate = new Date();
 		cutoffDate.setDate(cutoffDate.getDate() - daysBack);
-		
+
 		const q = query(
-			collection(db, 'tasks'),
+			collection(this.db, 'tasks'),
 			where('assignee', '==', personId),
 			where('status', '==', 'resolved'),
 			where('updatedAt', '>=', cutoffDate.toISOString()),
 			orderBy('updatedAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map(doc => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
 	}
 
 	// Cache for task counts to avoid repeated expensive queries
-	private taskCountsCache = new Map<string, { counts: TaskCounts, timestamp: number }>();
+	private taskCountsCache = new Map<string, { counts: TaskCounts; timestamp: number }>();
 	private readonly TASK_CACHE_DURATION = 30000; // 30 seconds
 
 	async getTaskCounts(projectSlug?: string): Promise<TaskCounts> {
 		const cacheKey = projectSlug || 'global';
-		
+
 		// Check cache first
 		const cached = this.taskCountsCache.get(cacheKey);
-		if (cached && (Date.now() - cached.timestamp) < this.TASK_CACHE_DURATION) {
+		if (cached && Date.now() - cached.timestamp < this.TASK_CACHE_DURATION) {
 			console.log(`FirebaseTaskService: Using cached task counts for ${cacheKey}`);
 			return cached.counts;
 		}
@@ -377,11 +402,11 @@ export class FirebaseTaskService implements ITaskService {
 		const counts = {
 			total: tasks.length
 		};
-		
+
 		// Cache the result
 		this.taskCountsCache.set(cacheKey, { counts, timestamp: Date.now() });
 		console.log(`FirebaseTaskService: Cached task counts for ${cacheKey}:`, counts);
-		
+
 		return counts;
 	}
 
@@ -395,13 +420,13 @@ export class FirebaseTaskService implements ITaskService {
 		if (includeResolved) {
 			// For outline-doc-linked tasks, include all tasks regardless of status
 			q = query(
-				collection(db, 'tasks'),
+				collection(this.db, 'tasks'),
 				where('nodeId', '==', nodeId),
 				orderBy('createdAt', 'desc')
 			);
 		} else if (projectSlug) {
 			q = query(
-				collection(db, 'tasks'),
+				collection(this.db, 'tasks'),
 				where('projectSlug', '==', projectSlug),
 				where('nodeId', '==', nodeId),
 				where('status', 'in', ['active', null]),
@@ -409,7 +434,7 @@ export class FirebaseTaskService implements ITaskService {
 			);
 		} else {
 			q = query(
-				collection(db, 'tasks'),
+				collection(this.db, 'tasks'),
 				where('nodeId', '==', nodeId),
 				where('status', 'in', ['active', null]),
 				orderBy('createdAt', 'desc')
@@ -417,7 +442,7 @@ export class FirebaseTaskService implements ITaskService {
 		}
 
 		return onSnapshot(q, (snapshot) => {
-			const tasks = snapshot.docs.map(doc => {
+			const tasks = snapshot.docs.map((doc) => {
 				const data = doc.data() as StoredTask;
 				return {
 					id: data.id,
@@ -434,50 +459,51 @@ export class FirebaseTaskService implements ITaskService {
 	}
 
 	subscribeToPersonTasks(
-		personId: string, 
+		personId: string,
 		callback: (tasks: TaskWithContext[]) => void,
 		projectSlug?: string
 	): Unsubscribe {
 		let q;
 		if (projectSlug) {
 			q = query(
-				collection(db, 'tasks'),
+				collection(this.db, 'tasks'),
 				where('projectSlug', '==', projectSlug),
 				where('assignee', '==', personId),
 				orderBy('createdAt', 'desc')
 			);
 		} else {
 			q = query(
-				collection(db, 'tasks'),
+				collection(this.db, 'tasks'),
 				where('assignee', '==', personId),
 				orderBy('createdAt', 'desc')
 			);
 		}
 
 		return onSnapshot(q, (snapshot) => {
-			const tasks = snapshot.docs.map(doc => 
-				this.toTaskWithContext(doc.data() as StoredTask)
-			);
+			const tasks = snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
 			callback(tasks);
 		});
 	}
 
 	subscribeToProjectTasks(
 		projectSlug: string,
-		callback: (tasks: TaskWithContext[]) => void
+		callback: (tasks: TaskWithContext[]) => void,
+		onError?: (error: unknown) => void
 	): Unsubscribe {
 		const q = query(
-			collection(db, 'tasks'),
+			collection(this.db, 'tasks'),
 			where('projectSlug', '==', projectSlug),
 			orderBy('createdAt', 'desc')
 		);
 
-		return onSnapshot(q, (snapshot) => {
-			const tasks = snapshot.docs.map(doc => 
-				this.toTaskWithContext(doc.data() as StoredTask)
-			);
-			callback(tasks);
-		});
+		return onSnapshot(
+			q,
+			(snapshot) => {
+				const tasks = snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
+				callback(tasks);
+			},
+			onError
+		);
 	}
 
 	private toTaskWithContext(storedTask: StoredTask): TaskWithContext {

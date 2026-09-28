@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
 	import { Handle, Position } from '@xyflow/svelte';
 	import { Trash2, Lock, Unlock } from '@lucide/svelte';
 
@@ -108,23 +110,20 @@
 		};
 
 		// Dispatch update event to save - preserve all sticker data
-		const event = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: {
-						...nodeData,
-						width,
-						height,
-						rotation,
-						stickerUrl: nodeData.stickerUrl || stickerUrl,
-						category: nodeData.category || category,
-						filename: nodeData.filename || filename
-					}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: {
+					...nodeData,
+					width,
+					height,
+					rotation,
+					stickerUrl: nodeData.stickerUrl || stickerUrl,
+					category: nodeData.category || category,
+					filename: nodeData.filename || filename
 				}
 			}
 		});
-		document.dispatchEvent(event);
 	}
 
 	// Handle delete
@@ -132,10 +131,7 @@
 		event.stopPropagation();
 
 		if (confirm('Are you sure you want to delete this sticker?')) {
-			const deleteEvent = new CustomEvent('nodeDelete', {
-				detail: { nodeId: id }
-			});
-			document.dispatchEvent(deleteEvent);
+			canvasActions.nodeDelete({ nodeId: id });
 		}
 	}
 
@@ -166,18 +162,15 @@
 		};
 
 		// Dispatch update event to save changes
-		const updateEvent = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: {
-						...nodeData,
-						locked: newLockState
-					}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: {
+					...nodeData,
+					locked: newLockState
 				}
 			}
 		});
-		document.dispatchEvent(updateEvent);
 	}
 </script>
 

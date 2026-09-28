@@ -1,5 +1,14 @@
 <script lang="ts">
+	import { createCommand } from '$lib/state/command';
+	import { onDestroy } from 'svelte';
+	const editCommand = createCommand({ queue: true });
+	onDestroy(() => editCommand.dispose());
+	import { provideCanvasActions, type CanvasPayloads } from '$lib/features/canvas/context';
+	import AsyncStatus from './AsyncStatus.svelte';
+	import { getAppServices } from '$lib/app/context';
 	import { onMount } from 'svelte';
+	import { connectCanvas } from '../features/canvas/connectCanvas';
+	import { CanvasPersistence } from '../features/canvas/CanvasPersistence';
 	import { SvelteMap } from 'svelte/reactivity';
 	import {
 		SvelteFlow,
@@ -16,8 +25,6 @@
 	import UniversalNode from './UniversalNode/UniversalNode.svelte';
 	import NoteNode from './UniversalNode/NoteNode.svelte';
 	import StickerNode from './UniversalNode/StickerNode.svelte';
-	import { FirebaseNodesService } from '../services/firebase/FirebaseNodesService';
-	import { projectsService, taskService } from '../services/instances';
 	import type { INodesService } from '../services/interfaces';
 	import CreateNodeModal from './CreateNodeModal.svelte';
 	import EditPanel from './EditPanel.svelte';
@@ -27,7 +34,6 @@
 	import StickerPanel from './stickers/StickerPanel.svelte';
 	import Cursor from './Cursor.svelte';
 	import type { Task } from '../types/task';
-	import { authStore } from '../stores/authStore';
 	import {
 		updateMatchingNodes as updateMatches,
 		navigateToMatch,
@@ -35,25 +41,20 @@
 		previousMatch as goToPreviousMatch
 	} from '../utils/canvasSearch';
 	import { ChevronRight, ChevronLeft } from '@lucide/svelte';
-	import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-	import { app } from '../firebase/config';
-	import { compressImageFile } from '../utils/resizeImage';
 	import { ProjectStore } from '../stores/ProjectStore.svelte';
 	import { setProjectStoreContext } from '../stores/projectStoreContext';
 	import '@xyflow/svelte/dist/style.css';
 	import './svelteflow.css';
 
-	let {
-		projectSlug,
-		onProjectUpdate,
-		onPanelOpen
-	} = $props<{
+	const { authStore, projectsService, taskService, createNodesService, imageService } =
+		getAppServices();
+	let { projectSlug, onProjectUpdate, onPanelOpen } = $props<{
 		projectSlug?: string;
 		onProjectUpdate?: () => void;
 		onPanelOpen?: () => void;
 	}>();
 
-	const projectStore = new ProjectStore();
+	const projectStore = new ProjectStore(taskService);
 	setProjectStoreContext(projectStore);
 
 	$effect(() => {
@@ -83,9 +84,11 @@
 	// Use $state.raw for better performance with arrays as shown in reference
 	let nodes = $state.raw<Node[]>([]);
 	let edges = $state.raw<Edge[]>([]);
-	let previousNodes = $state.raw<Node[]>([]);
-	let previousEdges = $state.raw<Edge[]>([]);
 	let nodesService: INodesService;
+	let canvasError = $state<string | null>(null);
+	let saveError = $state<string | null>(null);
+	let disposed = false;
+	const persistence = new CanvasPersistence((nodes, edges) => nodesService.saveBatch(nodes, edges));
 	let showCreateModal = $state(false);
 	let createPosition = $state({ x: 0, y: 0 });
 	let saveTimeout: ReturnType<typeof setTimeout>;
@@ -123,9 +126,6 @@
 	// Right sidebar toggle state
 	let showRightSidebar = $state(true);
 	let sidebarTab = $state<'nodes' | 'tasks'>('nodes');
-
-	// Flag to prevent redundant auto-saves after explicit saves
-	let skipNextAutoSave = $state(false);
 
 	// Selection state
 	let selectedNodes = $state<Node[]>([]);
@@ -202,7 +202,6 @@
 		}
 
 		selectedNodes = [];
-		skipNextAutoSave = true;
 	}
 
 	// Toggle Done status for all selected nodes
@@ -222,7 +221,6 @@
 		}
 
 		if (onProjectUpdate) onProjectUpdate();
-		skipNextAutoSave = true;
 	}
 
 	// Helper function to get viewport center position
@@ -242,83 +240,24 @@
 		return screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 	}
 
-	// Auto-save positions when nodes change (e.g., after dragging)
-	// but SKIP if nodes were just added/removed (handled by Firestore subscriptions)
+	// Stage edits immediately so remote snapshots cannot erase an unsaved drag.
 	$effect(() => {
-		if (nodesService && nodes.length > 0 && previousNodes.length > 0) {
-			// Only trigger auto-save if this is likely a position/content change, not add/remove
-			const nodeCountChanged = nodes.length !== previousNodes.length;
-			if (nodeCountChanged) {
-				// Node was added/removed - don't auto-save as Firestore already has the data
-				// Just update our tracking arrays
-				previousNodes = [...nodes];
-				previousEdges = [...edges];
-				return;
-			}
-
-			// Check if this is a position change (from dragging) - save immediately
-			let hasPositionChanges = false;
-			if (previousNodes.length === nodes.length) {
-				for (let i = 0; i < nodes.length; i++) {
-					const current = nodes[i];
-					const previous = previousNodes.find((p) => p.id === current.id);
-					if (
-						previous &&
-						(current.position.x !== previous.position.x ||
-							current.position.y !== previous.position.y)
-					) {
-						hasPositionChanges = true;
-						break;
-					}
-				}
-			}
-
-			clearTimeout(saveTimeout);
-
-			// Use shorter timeout for position changes to prevent Firebase conflicts
-			const timeout = hasPositionChanges ? 100 : 500;
-
-			saveTimeout = setTimeout(async () => {
-				// Skip auto-save if we just did an explicit save
-				if (skipNextAutoSave) {
-					skipNextAutoSave = false;
-					return;
-				}
-
-				console.log(
-					`Canvas: Auto-saving (hasPositionChanges: ${hasPositionChanges}, timeout: ${timeout}ms)`
-				);
-
-				// Use optimized batch save if available, otherwise fall back to regular batch save
-				if (
-					'saveBatchOptimized' in nodesService &&
-					typeof (nodesService as any).saveBatchOptimized === 'function'
-				) {
-					const result = (nodesService as any).saveBatchOptimized(
-						nodes,
-						edges,
-						previousNodes,
-						previousEdges
-					);
-					if (result instanceof Promise) await result;
-				} else {
-					const result = nodesService.saveBatch(nodes, edges);
-					if (result instanceof Promise) await result;
-				}
-
-				// Update previous state after saving
-				previousNodes = [...nodes];
-				previousEdges = [...edges];
-
-				// Update project node count if we have a project (debounced)
-				if (projectSlug && projectsService) {
-					await projectsService.updateNodeCount(projectSlug, nodes.length);
-				}
-			}, timeout);
-		}
+		if (!nodesService || !persistence.stage(nodes, edges)) return;
+		clearTimeout(saveTimeout);
+		saveTimeout = setTimeout(() => void saveCanvas(), 100);
 	});
 
-	// Removed duplicate node count update - handled in auto-save effect above
+	async function saveCanvas(): Promise<void> {
+		if (disposed || !nodesService) return;
+		persistence.stage(nodes, edges);
+		try {
+			await persistence.flush();
+			if (!disposed) saveError = null;
+		} catch (error) {
+			if (!disposed) saveError = 'Could not save canvas changes. Please retry.';
+			console.error('Failed to save canvas:', error);
+		}
+	}
 
 	// Optimized project sync - only when actually needed
 	$effect(() => {
@@ -357,7 +296,7 @@
 
 			// Get existing project data to preserve existing viewport positions
 			const projectResult = projectsService.getProject(projectSlug);
-			const project = projectResult instanceof Promise ? await projectResult : projectResult;
+			const project = await projectResult;
 
 			// Get existing viewport positions object, or create new one
 			const existingViewportPositions = (project as any)?.viewportPositions || {};
@@ -397,7 +336,7 @@
 
 		try {
 			const projectResult = projectsService.getProject(projectSlug);
-			const project = projectResult instanceof Promise ? await projectResult : projectResult;
+			const project = await projectResult;
 
 			// Check for user-specific viewport position
 			const userViewportPosition = (project as any)?.viewportPositions?.[currentUser.uid];
@@ -406,6 +345,7 @@
 				const { x, y, zoom } = userViewportPosition;
 				// Use setTimeout to ensure SvelteFlow is fully mounted
 				setTimeout(() => {
+					if (disposed) return;
 					setViewport({ x, y, zoom }, { duration: 0 });
 					console.log(
 						'Canvas: Restored viewport position for user:',
@@ -427,207 +367,124 @@
 		debouncedSaveViewport();
 	}
 
-	onMount(() => {
-		// Initialize services asynchronously to get actual project ID
-		(async () => {
-			// Get the actual project ID from project slug
-			let actualProjectId = 'default-project';
-			if (projectSlug) {
-				try {
-					const projectResult = projectsService.getProject(projectSlug);
-					const project = projectResult instanceof Promise ? await projectResult : projectResult;
+	// Listen for node events
+	const handleNodeDeleteEvent = (payload: CanvasPayloads['nodeDelete']) => {
+		handleNodeDelete(payload.nodeId);
+	};
+	const handleNodeUpdateEvent = (payload: CanvasPayloads['nodeUpdate']) => {
+		void editCommand.run(() => nodesService.updateNode(payload.nodeId, payload.data));
+	};
+	const handleNodeEditEvent = (payload: CanvasPayloads['nodeEdit']) => {
+		editNodeId = payload.nodeId;
+		// Get the latest node data from the nodes array instead of the event
+		// This ensures we have the most up-to-date data, including any recent image uploads
+		const currentNode = nodes.find((n) => n.id === payload.nodeId);
+		editNodeData = currentNode?.data?.nodeData || payload.nodeData;
+		editTemplateType = payload.templateType;
+		showEditPanel = true;
+		// Close other panels if open to avoid conflicts
+		showNodeTaskSidebar = false;
+		showStickerPanel = false;
+		// Notify parent to close other panels
+		onPanelOpen?.();
+	};
 
-					if (project) {
-						actualProjectId = project.id;
-					}
-				} catch (error) {
-					console.error('Failed to load project:', error);
-				}
-			}
+	const handleNodeTasksOpenEvent = (payload: CanvasPayloads['nodeTasksOpen']) => {
+		// Clean up previous subscription if any
+		if (taskSubscriptionCleanup) {
+			taskSubscriptionCleanup();
+			taskSubscriptionCleanup = null;
+		}
 
-			// Load and restore viewport position
-			await loadViewportPosition();
+		taskSidebarNodeId = payload.nodeId;
+		taskSidebarNodeTitle = payload.nodeTitle;
+		taskSidebarTasks = payload.tasks;
+		showNodeTaskSidebar = true;
+		// Notify parent to close other panels
+		onPanelOpen?.();
 
-			nodesService = new FirebaseNodesService(
-				actualProjectId,
-				(newNodes) => {
-					nodes = newNodes;
+		// Set up real-time subscription if available
+		if (taskService.subscribeToNodeTasks) {
+			taskSubscriptionCleanup = taskService.subscribeToNodeTasks(
+				payload.nodeId,
+				(updatedTasks) => {
+					console.log('Real-time task update:', updatedTasks);
+					taskSidebarTasks = [...updatedTasks];
 				},
-				() => nodes,
-				(newEdges) => {
-					edges = newEdges;
-				},
-				() => edges,
 				projectSlug
 			);
+		}
 
-			// Load initial data - localStorage services use loadFromStorage, Firebase services use subscriptions
-			if (nodesService.loadFromStorage) {
-				// localStorage service
-				nodesService.loadFromStorage();
-			} else {
-				// Firebase service - set up real-time subscriptions
-				console.log('Setting up Firebase subscriptions...');
-				console.log('nodesService methods:', {
-					subscribeToNodes: !!nodesService.subscribeToNodes,
-					subscribeToEdges: !!nodesService.subscribeToEdges
-				});
+		// Close other panels if open to avoid conflicts
+		showEditPanel = false;
+		showStickerPanel = false;
+	};
 
-				if (nodesService.subscribeToNodes && nodesService.subscribeToEdges) {
-					console.log('Setting up real-time subscriptions');
-					// Subscribe to real-time updates
-					const unsubscribeNodes = nodesService.subscribeToNodes((updatedNodes) => {
-						console.log('Canvas received nodes update:', updatedNodes.length, 'nodes');
-						nodes = updatedNodes;
-						// Initialize previous state if empty (first load)
-						if (previousNodes.length === 0) {
-							previousNodes = [...updatedNodes];
-						}
+	const handleAddTaskEvent = (payload: CanvasPayloads['addTask']) => {
+		taskModalNodeId = payload.nodeId;
+		taskModalTask = undefined; // undefined = add mode
+		showTaskModal = true;
+	};
 
-						// Check if we need to create initial project node
-						if (updatedNodes.length === 0 && !hasAttemptedProjectNodeCreation) {
-							hasAttemptedProjectNodeCreation = true;
-							console.log('No nodes found, creating initial project node');
-							setTimeout(() => {
-								const initialPosition = getViewportCenterPosition();
-								createSyncedProjectNode(initialPosition);
-							}, 100);
-						}
-					});
+	const handleAddStickerEvent = (payload: CanvasPayloads['addSticker']) => {
+		void handleAddSticker(payload);
+	};
 
-					const unsubscribeEdges = nodesService.subscribeToEdges((updatedEdges) => {
-						console.log('Canvas received edges update:', updatedEdges.length, 'edges');
-						edges = updatedEdges;
-						// Initialize previous state if empty (first load)
-						if (previousEdges.length === 0) {
-							previousEdges = [...updatedEdges];
-						}
-					});
+	provideCanvasActions({
+		nodeDelete: handleNodeDeleteEvent,
+		nodeUpdate: handleNodeUpdateEvent,
+		nodeEdit: handleNodeEditEvent,
+		nodeTasksOpen: handleNodeTasksOpenEvent,
+		addTask: handleAddTaskEvent,
+		addSticker: handleAddStickerEvent
+	});
 
-					// Clean up subscriptions on component destroy
-					return () => {
-						console.log('Cleaning up Firebase subscriptions');
-						unsubscribeNodes();
-						unsubscribeEdges();
-					};
-				} else {
-					// Fallback to manual loading if subscriptions not available
-					try {
-						const nodeResults = nodesService.getNodes();
-						const edgeResults = nodesService.getEdges();
-
-						const loadedNodes = nodeResults instanceof Promise ? await nodeResults : nodeResults;
-						const loadedEdges = edgeResults instanceof Promise ? await edgeResults : edgeResults;
-
-						nodes = loadedNodes;
-						edges = loadedEdges;
-						// Initialize previous state for local storage
-						previousNodes = [...loadedNodes];
-						previousEdges = [...loadedEdges];
-					} catch (error) {
-						console.error('Failed to load nodes and edges:', error);
+	onMount(() => {
+		let previousNodeCount: number | undefined;
+		let initialNodeTimeout: ReturnType<typeof setTimeout>;
+		const disconnect = connectCanvas(
+			async () => {
+				const project = projectSlug ? await projectsService.getProject(projectSlug) : null;
+				if (projectSlug && !project) throw new Error('Project not found');
+				nodesService = createNodesService(project?.id ?? 'default-project', projectSlug);
+				if (!disposed) await loadViewportPosition();
+				return nodesService;
+			},
+			{
+				nodes: (updatedNodes) => {
+					nodes = persistence.receiveNodes(updatedNodes);
+					if (projectSlug && previousNodeCount !== updatedNodes.length) {
+						previousNodeCount = updatedNodes.length;
+						void Promise.resolve(
+							projectsService.updateNodeCount(projectSlug, updatedNodes.length)
+						).catch(console.error);
 					}
+					if (updatedNodes.length === 0 && !hasAttemptedProjectNodeCreation) {
+						hasAttemptedProjectNodeCreation = true;
+						initialNodeTimeout = setTimeout(() => {
+							if (!disposed && nodes.length === 0) {
+								void createSyncedProjectNode(getViewportCenterPosition()).catch(console.error);
+							}
+						}, 100);
+					}
+				},
+				edges: (updatedEdges) => {
+					edges = persistence.receiveEdges(updatedEdges);
+				},
+				error: (error) => {
+					canvasError = 'Could not load this canvas. Please reload to try again.';
+					console.error('Failed to load canvas:', error);
 				}
 			}
-
-			// For localStorage services, handle initial project node creation
-			if (nodesService.loadFromStorage) {
-				// Add initial project node if none exist, or sync existing project node
-				if (nodes.length === 0) {
-					// Use a small delay to ensure the Svelte Flow component is fully mounted
-					setTimeout(() => {
-						if (nodes.length === 0) {
-							// Double-check in case nodes were loaded from storage
-							const initialPosition = getViewportCenterPosition();
-							createSyncedProjectNode(initialPosition);
-						}
-					}, 100);
-				} else {
-					// Sync existing project node with project data
-					syncProjectNode();
-				}
-			}
-		})();
-
-		// Listen for node events
-		const handleNodeDeleteEvent = (event: CustomEvent) => {
-			handleNodeDelete(event.detail.nodeId);
-		};
-		const handleNodeUpdateEvent = (event: CustomEvent) => {
-			nodesService.updateNode(event.detail.nodeId, event.detail.data);
-		};
-		const handleNodeEditEvent = (event: CustomEvent) => {
-			editNodeId = event.detail.nodeId;
-			// Get the latest node data from the nodes array instead of the event
-			// This ensures we have the most up-to-date data, including any recent image uploads
-			const currentNode = nodes.find((n) => n.id === event.detail.nodeId);
-			editNodeData = currentNode?.data?.nodeData || event.detail.nodeData;
-			editTemplateType = event.detail.templateType;
-			showEditPanel = true;
-			// Close other panels if open to avoid conflicts
-			showNodeTaskSidebar = false;
-			showStickerPanel = false;
-			// Notify parent to close other panels
-			onPanelOpen?.();
-		};
-
-		const handleNodeTasksOpenEvent = (event: CustomEvent) => {
-			// Clean up previous subscription if any
-			if (taskSubscriptionCleanup) {
-				taskSubscriptionCleanup();
-				taskSubscriptionCleanup = null;
-			}
-
-			taskSidebarNodeId = event.detail.nodeId;
-			taskSidebarNodeTitle = event.detail.nodeTitle;
-			taskSidebarTasks = event.detail.tasks;
-			showNodeTaskSidebar = true;
-			// Notify parent to close other panels
-			onPanelOpen?.();
-
-			// Set up real-time subscription if available
-			if (taskService.subscribeToNodeTasks) {
-				taskSubscriptionCleanup = taskService.subscribeToNodeTasks(
-					event.detail.nodeId,
-					(updatedTasks) => {
-						console.log('Real-time task update:', updatedTasks);
-						taskSidebarTasks = [...updatedTasks];
-					},
-					projectSlug
-				);
-			}
-
-			// Close other panels if open to avoid conflicts
-			showEditPanel = false;
-			showStickerPanel = false;
-		};
-
-		const handleAddTaskEvent = (event: CustomEvent) => {
-			taskModalNodeId = event.detail.nodeId;
-			taskModalTask = undefined; // undefined = add mode
-			showTaskModal = true;
-		};
-
-		const handleAddStickerEvent = (event: CustomEvent) => {
-			handleAddSticker(event);
-		};
-
-		document.addEventListener('nodeDelete', handleNodeDeleteEvent as EventListener);
-		document.addEventListener('nodeUpdate', handleNodeUpdateEvent as EventListener);
-		document.addEventListener('nodeEdit', handleNodeEditEvent as EventListener);
-		document.addEventListener('nodeTasksOpen', handleNodeTasksOpenEvent as EventListener);
-		document.addEventListener('addTask', handleAddTaskEvent as EventListener);
-		document.addEventListener('addSticker', handleAddStickerEvent as EventListener);
-		document.addEventListener('closeCanvasPanels', handleCloseCanvasPanels as EventListener);
+		);
 
 		return () => {
-			document.removeEventListener('nodeDelete', handleNodeDeleteEvent as EventListener);
-			document.removeEventListener('nodeUpdate', handleNodeUpdateEvent as EventListener);
-			document.removeEventListener('nodeEdit', handleNodeEditEvent as EventListener);
-			document.removeEventListener('nodeTasksOpen', handleNodeTasksOpenEvent as EventListener);
-			document.removeEventListener('addTask', handleAddTaskEvent as EventListener);
-			document.removeEventListener('addSticker', handleAddStickerEvent as EventListener);
-			document.removeEventListener('closeCanvasPanels', handleCloseCanvasPanels as EventListener);
+			disposed = true;
+			disconnect();
+			persistence.dispose();
+			clearTimeout(initialNodeTimeout);
+			clearTimeout(saveTimeout);
+			clearTimeout(viewportSaveTimeout);
 
 			// Clean up task subscription
 			if (taskSubscriptionCleanup) {
@@ -659,12 +516,12 @@
 		}
 	}
 
-	function handleCreateNode(templateType: string) {
+	async function handleCreateNode(templateType: string) {
 		// Prevent duplicate node creation if modal is already closing
 		if (!showCreateModal || !nodesService) return;
 
-		(nodesService as any).addNode(templateType, createPosition);
-		showCreateModal = false;
+		const result = await editCommand.run(() => nodesService.addNode(templateType, createPosition));
+		if (result.ok) showCreateModal = false;
 	}
 
 	function handleToolbarCreateNode(templateType: string) {
@@ -672,7 +529,7 @@
 
 		// Get the center of the viewport for toolbar-created nodes
 		const centerPosition = getViewportCenterPosition();
-		(nodesService as any).addNode(templateType, centerPosition);
+		void editCommand.run(() => nodesService.addNode(templateType, centerPosition));
 	}
 
 	// ── Canvas image drag-and-drop ───────────────────────────────────────────
@@ -715,9 +572,9 @@
 				const dropPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 				const position = { x: dropPos.x - 50, y: dropPos.y - 50 };
 
-				const newNode = await (nodesService as any).addNode('sticker', position);
+				const newNode = await nodesService.addNode('sticker', position);
 				if (newNode?.id) {
-					await (nodesService as any).updateNode(newNode.id, {
+					await nodesService.updateNode(newNode.id, {
 						nodeData: {
 							title: stickerData.name,
 							stickerUrl: stickerData.stickerUrl,
@@ -742,23 +599,18 @@
 		if (files.length === 0) return;
 
 		canvasUploading = true;
-		const storage = getStorage(app);
 
 		for (const file of files) {
 			try {
 				const dropPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 				const position = { x: dropPos.x - 100, y: dropPos.y - 75 };
 
-				const newNode = await (nodesService as any).addNode('image', position);
+				const newNode = await nodesService.addNode('image', position);
 				if (!newNode?.id) continue;
 
-				const compressed = await compressImageFile(file);
-				const timestamp = Date.now();
-				const storageRef = ref(storage, `images/${newNode.id}/${timestamp}_${file.name}`);
-				const snapshot = await uploadBytes(storageRef, compressed);
-				const downloadURL = await getDownloadURL(snapshot.ref);
+				const downloadURL = await imageService.uploadImage(newNode.id, file);
 
-				await (nodesService as any).updateNode(newNode.id, {
+				await nodesService.updateNode(newNode.id, {
 					nodeData: { imageUrl: downloadURL }
 				});
 			} catch (err) {
@@ -788,14 +640,14 @@
 	}
 
 	// Handle add sticker event (click-based)
-	async function handleAddSticker(event: CustomEvent) {
-		console.log('🎨 Canvas received add sticker event:', event.detail);
+	async function handleAddSticker(payload: CanvasPayloads['addSticker']) {
+		console.log('🎨 Canvas received add sticker event:', payload);
 
 		if (!nodesService) return;
 
 		let baseNode: any = null;
 		try {
-			const stickerData = event.detail;
+			const stickerData = payload;
 
 			if (stickerData.type === 'sticker') {
 				// Validate sticker data first
@@ -819,11 +671,11 @@
 				};
 
 				// First create a basic sticker node using the service
-				baseNode = await (nodesService as any).addNode('sticker', position);
+				baseNode = await nodesService.addNode('sticker', position);
 				console.log('🎨 Created base sticker node:', baseNode);
 
 				// Then immediately update it with the sticker-specific data
-				const success = await (nodesService as any).updateNode(baseNode.id, {
+				const success = await nodesService.updateNode(baseNode.id, {
 					nodeData: stickerNodeData
 				});
 
@@ -834,7 +686,7 @@
 					console.error('❌ Failed to update sticker node with data, cleaning up incomplete node');
 					// Clean up the incomplete node
 					try {
-						await (nodesService as any).deleteNode(baseNode.id);
+						await nodesService.deleteNode(baseNode.id);
 						console.log('🧹 Cleaned up incomplete sticker node');
 					} catch (deleteError) {
 						console.error('❌ Failed to clean up incomplete sticker node:', deleteError);
@@ -848,7 +700,7 @@
 			// Additional cleanup if baseNode was created but update failed
 			if (baseNode && baseNode.id) {
 				try {
-					await (nodesService as any).deleteNode(baseNode.id);
+					await nodesService.deleteNode(baseNode.id);
 					console.log('🧹 Emergency cleanup of incomplete sticker node');
 				} catch (deleteError) {
 					console.error('❌ Failed emergency cleanup of sticker node:', deleteError);
@@ -907,13 +759,13 @@
 	}
 
 	function handleNodeDelete(nodeId: string) {
-		nodesService.deleteNode(nodeId);
+		void editCommand.run(() => nodesService.deleteNode(nodeId));
 	}
 
-	function handleEditPanelSave(nodeId: string, data: any) {
+	async function handleEditPanelSave(nodeId: string, data: any) {
 		console.log('Canvas.handleEditPanelSave called:', { nodeId, data });
-		nodesService.updateNode(nodeId, data);
-		skipNextAutoSave = true; // Skip the next auto-save since we just did an explicit save
+		const result = await editCommand.run(() => nodesService.updateNode(nodeId, data));
+		if (!result.ok) return;
 
 		// Check if status changed - if so, trigger project update to refresh status counts
 		const hasStatusChange = data.nodeData && data.nodeData.status !== undefined;
@@ -940,7 +792,7 @@
 
 			if (Object.keys(updates).length > 1) {
 				// More than just nodeCount
-				projectsService.updateProject(projectSlug, updates);
+				await editCommand.run(() => projectsService.updateProject(projectSlug, updates));
 			}
 		}
 
@@ -950,18 +802,10 @@
 		}
 	}
 
-	function handleEditPanelDelete(nodeId: string) {
-		console.log('Canvas.handleEditPanelDelete called for:', nodeId);
-		console.log('nodesService:', nodesService);
-
-		try {
-			const result = nodesService.deleteNode(nodeId);
-			console.log('deleteNode result:', result);
-			showEditPanel = false;
-		} catch (error) {
-			console.error('Failed to delete node:', error);
-			alert('Failed to delete node. Check console for details.');
-		}
+	async function handleEditPanelDelete(nodeId: string) {
+		if (nodeId.startsWith('project-')) return;
+		const result = await editCommand.run(() => nodesService.deleteNode(nodeId));
+		if (result.ok) showEditPanel = false;
 	}
 
 	// Handle node drag start to bring node to front by reordering array
@@ -981,74 +825,9 @@
 		}
 	}
 
-	// Handle node drag stop to save position immediately
-	function handleNodeDragStop(event: any) {
-		console.log('Node drag stopped, saving positions...', event);
-		console.log('Event details:', {
-			node: event?.node,
-			targetNode: event?.targetNode,
-			eventType: typeof event
-		});
-		console.log(
-			'Current nodes state:',
-			nodes.map((n) => ({ id: n.id, position: n.position, templateType: n.data?.templateType }))
-		);
-
-		if (nodesService) {
-			// Single atomic save - use optimized batch save if available
-			if (
-				'saveBatchOptimized' in nodesService &&
-				typeof (nodesService as any).saveBatchOptimized === 'function'
-			) {
-				const result = (nodesService as any).saveBatchOptimized(
-					nodes,
-					edges,
-					previousNodes,
-					previousEdges
-				);
-				if (result instanceof Promise) {
-					result
-						.then(() => {
-							console.log('Positions saved after drag (optimized)');
-							// Update previous state and skip next auto-save
-							previousNodes = [...nodes];
-							previousEdges = [...edges];
-							skipNextAutoSave = true;
-						})
-						.catch((error) => {
-							console.error('Failed to save positions after drag:', error);
-						});
-				} else {
-					// Update previous state and skip next auto-save
-					previousNodes = [...nodes];
-					previousEdges = [...edges];
-					skipNextAutoSave = true;
-				}
-			} else if (nodesService.saveBatch) {
-				const result = nodesService.saveBatch(nodes, edges);
-				if (result instanceof Promise) {
-					result
-						.then(() => {
-							console.log('Positions saved after drag');
-							// Update previous state and skip next auto-save
-							previousNodes = [...nodes];
-							previousEdges = [...edges];
-							skipNextAutoSave = true;
-						})
-						.catch((error) => {
-							console.error('Failed to save positions after drag:', error);
-						});
-				} else {
-					// Update previous state and skip next auto-save
-					previousNodes = [...nodes];
-					previousEdges = [...edges];
-					skipNextAutoSave = true;
-				}
-			}
-		}
-
-		// Removed individual node position save to prevent triple saves
-		// The batch save above handles all position updates atomically
+	function handleNodeDragStop() {
+		clearTimeout(saveTimeout);
+		void saveCanvas();
 	}
 
 	// Function to refresh task sidebar data only (no global event spam)
@@ -1059,16 +838,10 @@
 		if (showNodeTaskSidebar && taskSidebarNodeId && taskService) {
 			console.log('Canvas: Refreshing sidebar tasks for node:', taskSidebarNodeId);
 			const tasksResult = taskService.getNodeTasks(taskSidebarNodeId, projectSlug);
-			const updatedTasks = tasksResult instanceof Promise ? await tasksResult : tasksResult;
+			const updatedTasks = await tasksResult;
 			console.log('Canvas: Updated sidebar tasks:', updatedTasks.length);
 			taskSidebarTasks = [...updatedTasks];
 		}
-
-		// For localStorage services only - refresh storage data
-		if (nodesService.loadFromStorage) {
-			nodesService.loadFromStorage();
-		}
-		// Firebase services handle updates via subscriptions automatically
 	}
 
 	// Handle task modal completion
@@ -1081,8 +854,8 @@
 	async function createSyncedProjectNode(position: { x: number; y: number }) {
 		if (!projectSlug || !projectsService || !nodesService) {
 			if (nodesService) {
-				const result = (nodesService as any).addNode('project', position);
-				if (result instanceof Promise) result.catch(console.error);
+				const result = nodesService.addNode('project', position);
+				void result.catch(console.error);
 			}
 			return;
 		}
@@ -1091,27 +864,27 @@
 		let project: any;
 		try {
 			const projectResult = projectsService.getProject(projectSlug);
-			project = projectResult instanceof Promise ? await projectResult : projectResult;
+			project = await projectResult;
 		} catch (error) {
 			console.error('Failed to load project for node creation:', error);
 			if (nodesService) {
-				const result = (nodesService as any).addNode('project', position);
-				if (result instanceof Promise) result.catch(console.error);
+				const result = nodesService.addNode('project', position);
+				void result.catch(console.error);
 			}
 			return;
 		}
 
 		if (!project) {
 			if (nodesService) {
-				const result = (nodesService as any).addNode('project', position);
-				if (result instanceof Promise) result.catch(console.error);
+				const result = nodesService.addNode('project', position);
+				void result.catch(console.error);
 			}
 			return;
 		}
 
 		// Use the service's addNode method which properly handles Firebase
 		try {
-			const newNode = await (nodesService as any).addNode('project', position);
+			const newNode = await nodesService.addNode('project', position);
 
 			// Update the node with project data
 			const nodeData = {
@@ -1145,7 +918,7 @@
 		let project: any;
 		try {
 			const projectResult = projectsService.getProject(projectSlug);
-			project = projectResult instanceof Promise ? await projectResult : projectResult;
+			project = await projectResult;
 		} catch (error) {
 			console.error('Failed to load project for sync check:', error);
 			return;
@@ -1178,7 +951,7 @@
 		if (!project) {
 			try {
 				const projectResult = projectsService.getProject(projectSlug);
-				project = projectResult instanceof Promise ? await projectResult : projectResult;
+				project = await projectResult;
 			} catch (error) {
 				console.error('Failed to load project for sync:', error);
 				return;
@@ -1283,6 +1056,22 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="relative flex-1" onclick={handleCanvasClick}>
+		<AsyncStatus
+			state={{ status: projectStore.status, error: projectStore.error }}
+			onRetry={() => projectStore.retry()}
+		/>
+		<AsyncStatus state={$editCommand} pendingLabel="Saving…" />
+		{#if canvasError || saveError}
+			<div
+				role="alert"
+				class="absolute top-16 left-3 z-50 rounded border border-red-300 bg-white p-3 text-sm text-red-800"
+			>
+				{canvasError || saveError}
+				{#if saveError}<button class="ml-2 underline" onclick={() => void saveCanvas()}
+						>Retry save</button
+					>{/if}
+			</div>
+		{/if}
 		<!-- Floating Toolbar -->
 		<Toolbar
 			view="project"
@@ -1522,7 +1311,7 @@
 														task.id,
 														task.projectSlug
 													);
-													if (result instanceof Promise) await result;
+													await result;
 												}}
 												class="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-zinc-300 hover:border-green-500 hover:bg-green-50"
 												aria-label="Mark task as complete"
@@ -1556,6 +1345,7 @@
 				</button>
 				<!-- Node inspector -->
 				<EditPanel
+					error={$editCommand.error}
 					nodeId={editNodeId}
 					nodeData={editNodeData}
 					templateType={editTemplateType}
@@ -1615,6 +1405,7 @@
 
 {#if showCreateModal}
 	<CreateNodeModal
+		error={$editCommand.error}
 		position={createPosition}
 		onCreate={handleCreateNode}
 		onClose={() => (showCreateModal = false)}

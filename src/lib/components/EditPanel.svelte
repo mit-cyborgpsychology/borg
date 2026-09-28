@@ -16,13 +16,15 @@
 		nodeData,
 		templateType,
 		onSave,
-		onDelete
+		onDelete,
+		error = null
 	} = $props<{
 		nodeId: string;
 		nodeData: any;
 		templateType: string;
-		onSave: (nodeId: string, data: any) => void;
+		onSave: (nodeId: string, data: any) => Promise<void>;
 		onDelete: (nodeId: string) => void;
+		error?: string | null;
 	}>();
 
 	let template: NodeTemplate = $derived(getTemplate(templateType || 'blank'));
@@ -52,22 +54,25 @@
 		}
 	});
 
-	function handleSave() {
+	async function handleSave() {
 		// Include custom fields in the saved data
 		const dataToSave = {
 			...editableData,
 			customFields: customFields
 		};
-		onSave(nodeId, { nodeData: dataToSave });
+		await onSave(nodeId, { nodeData: dataToSave });
 	}
 
 	function autoSave() {
 		// Debounced autosave to avoid excessive saves
 		if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
 		isSaving = true;
-		autoSaveTimeout = setTimeout(() => {
-			handleSave();
-			isSaving = false;
+		autoSaveTimeout = setTimeout(async () => {
+			try {
+				await handleSave();
+			} finally {
+				isSaving = false;
+			}
 		}, 800); // 800ms gives enough time to see the indicator
 	}
 
@@ -109,6 +114,8 @@
 	);
 </script>
 
+{#if error}<p role="alert" class="px-4 py-2 text-sm text-red-700">{error}</p>{/if}
+
 <!-- Header -->
 <div class="border-b border-zinc-200 px-3 py-2">
 	<div class="flex items-center justify-between">
@@ -142,7 +149,9 @@
 </div>
 
 <!-- Content -->
-<div class="flex-1 overflow-y-auto p-3 text-xs [&_label]:text-xs [&_input]:text-xs [&_textarea]:text-xs [&_select]:text-xs">
+<div
+	class="flex-1 overflow-y-auto p-3 text-xs [&_input]:text-xs [&_label]:text-xs [&_select]:text-xs [&_textarea]:text-xs"
+>
 	<div class="space-y-3">
 		{#each template.fields as field}
 			<div>

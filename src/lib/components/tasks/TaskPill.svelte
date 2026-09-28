@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { getAppServices } from '$lib/app/context';
 	import type { PersonTaskCount } from '../../types/task';
-	import { getPersonCached } from '../../stores/peopleCache.svelte';
+	const { getPersonCached } = getAppServices().peopleCache;
 
 	interface Props {
 		personTaskCount: PersonTaskCount;

@@ -1,30 +1,40 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+	import { createTaskCommands } from '../../features/tasks/createTaskCommands';
+	import { createTasksState } from '../../features/tasks/createTasksState';
+	import AsyncStatus from '../AsyncStatus.svelte';
+	import StatusOverlay from '../StatusOverlay.svelte';
+	import { getAppServices } from '$lib/app/context';
 	import { onMount } from 'svelte';
 	import { CheckSquare } from '@lucide/svelte';
-	import type { ITaskService } from '../../services/interfaces/ITaskService';
 	import type { Task, TaskWithContext } from '../../types/task';
 	import { goto } from '$app/navigation';
 	import HierarchicalTaskView from '../tasks/HierarchicalTaskView.svelte';
-	import { authStore } from '../../stores/authStore';
-	import { projectsService } from '../../services/instances';
-	import { getPersonCached } from '../../stores/peopleCache.svelte';
-	import { joinTaskContext } from '../../services/taskContext';
 
-	let {
-		taskService,
-		activeTab: currentTab
-	} = $props<{
-		taskService: ITaskService;
+	const { taskService, authStore, projectsService } = getAppServices();
+	const { getPersonCached } = getAppServices().peopleCache;
+	const { joinTaskContext } = getAppServices().taskContext;
+
+	const featureState = createTasksState(taskService, projectsService, joinTaskContext);
+	const resource = featureState.list;
+	const taskCommands = createTaskCommands(taskService, () => loadTasks(true));
+	const taskCommand = taskCommands.command;
+	onDestroy(() => {
+		featureState.dispose();
+		taskCommands.dispose();
+	});
+
+	let { activeTab: currentTab } = $props<{
 		activeTab: string;
 	}>();
 
-	let activeTasks = $state<TaskWithContext[]>([]);
-	let resolvedTasks = $state<TaskWithContext[]>([]);
+	let activeTasks = $derived($resource.data.active);
+	let resolvedTasks = $derived($resource.data.resolved);
 	let filteredActiveTasks = $state<TaskWithContext[]>([]);
 	let filteredResolvedTasks = $state<TaskWithContext[]>([]);
 	let viewTab = $state<'active' | 'resolved'>('active');
 	let searchQuery = $state('');
-	let dataLoaded = $state(false);
+	let dataLoaded = $derived($resource.status !== 'idle');
 
 	// Lazy load data when tab becomes active
 	$effect(() => {
@@ -34,51 +44,16 @@
 	});
 
 	async function loadTasks(force = false) {
-		if (dataLoaded && !force) return; // Prevent duplicate loading unless forced
-
-		const activeResult = taskService.getActiveTasks();
-		let allActiveTasks = activeResult instanceof Promise ? await activeResult : activeResult;
-
-		const resolvedResult = taskService.getResolvedTasks();
-		let allResolvedTasks = resolvedResult instanceof Promise ? await resolvedResult : resolvedResult;
-
-		// Filter tasks for collaborators - only show tasks from projects they're invited to
-		if ($authStore.userType === 'collaborator') {
-			const userProjects = await projectsService.getAllProjects(); // This already filters for collaborators
-			const projectSlugs = userProjects.map(p => p.slug);
-			
-			allActiveTasks = allActiveTasks.filter((task: TaskWithContext) =>
-				task.projectSlug && projectSlugs.includes(task.projectSlug)
-			);
-
-			allResolvedTasks = allResolvedTasks.filter((task: TaskWithContext) =>
-				task.projectSlug && projectSlugs.includes(task.projectSlug)
-			);
-		}
-
-		activeTasks = allActiveTasks;
-		resolvedTasks = allResolvedTasks;
-
-		applyFilters();
-		dataLoaded = true;
-
-		// Resolve live project/node titles in the background so the list
-		// renders immediately with whatever's cached, then updates in place.
-		const [joinedActive, joinedResolved] = await Promise.all([
-			joinTaskContext(allActiveTasks),
-			joinTaskContext(allResolvedTasks)
-		]);
-		activeTasks = joinedActive;
-		resolvedTasks = joinedResolved;
-		applyFilters();
+		if (dataLoaded && !force) return;
+		await featureState.load($authStore.userType === 'collaborator');
 	}
 
-	async function applyFilters() {
-		await applyFiltersToTasks(activeTasks, 'active');
-		await applyFiltersToTasks(resolvedTasks, 'resolved');
+	function applyFilters() {
+		applyFiltersToTasks(activeTasks, 'active');
+		applyFiltersToTasks(resolvedTasks, 'resolved');
 	}
 
-	async function applyFiltersToTasks(tasks: TaskWithContext[], type: 'active' | 'resolved') {
+	function applyFiltersToTasks(tasks: TaskWithContext[], type: 'active' | 'resolved') {
 		let filtered = tasks;
 
 		// Filter by search query
@@ -117,28 +92,14 @@
 	});
 
 	async function handleDeleteTask(task: TaskWithContext) {
-		if (confirm('Are you sure you want to delete this task permanently?')) {
-			const result = taskService.deleteTask(task.nodeId, task.id, task.projectSlug);
-			if (result instanceof Promise) await result;
-			await loadTasks(true); // Force reload
-		}
+		if (confirm('Are you sure you want to delete this task permanently?'))
+			await taskCommands.remove(task);
 	}
-
 	async function handleResolveTask(task: TaskWithContext) {
-		const result = taskService.resolveTask(task.nodeId, task.id, task.projectSlug);
-		if (result instanceof Promise) await result;
-		await loadTasks(true); // Force reload
+		await taskCommands.resolve(task);
 	}
-
 	async function handleReactivateTask(task: TaskWithContext) {
-		const result = taskService.updateTask(
-			task.nodeId,
-			task.id,
-			{ status: 'active' } as Partial<Task>,
-			task.projectSlug
-		);
-		if (result instanceof Promise) await result;
-		await loadTasks(true); // Force reload
+		await taskCommands.reactivate(task);
 	}
 
 	// Get task stats
@@ -148,6 +109,12 @@
 		overdue: activeTasks.filter((t) => t.dueDate && new Date(t.dueDate) < new Date()).length
 	});
 </script>
+
+<StatusOverlay>
+	<AsyncStatus state={$taskCommand} pendingLabel="Saving…" />
+
+	<AsyncStatus state={$resource} onRetry={() => void loadTasks(true)} />
+</StatusOverlay>
 
 <div class="flex h-full w-full flex-col overflow-hidden">
 	<!-- Header -->
@@ -185,7 +152,9 @@
 	</div> -->
 
 	<!-- Sticky toolbar + tabs in one row -->
-	<div class="flex w-full flex-shrink-0 items-center gap-2 border-b border-borg-brown bg-borg-beige px-4 py-2">
+	<div
+		class="flex w-full flex-shrink-0 items-center gap-2 border-b border-borg-brown bg-borg-beige px-4 py-2"
+	>
 		<input
 			type="text"
 			placeholder="Search tasks..."
@@ -193,8 +162,18 @@
 			class="w-44 rounded border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-black placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
 		/>
 		<div class="flex rounded border border-zinc-300 bg-white p-0.5">
-			<button onclick={() => (viewTab = 'active')} class="rounded px-2.5 py-1 text-sm font-medium transition-colors {viewTab === 'active' ? 'bg-zinc-100 text-zinc-800' : 'text-zinc-500 hover:text-zinc-700'}">Active ({taskStats.active})</button>
-			<button onclick={() => (viewTab = 'resolved')} class="rounded px-2.5 py-1 text-sm font-medium transition-colors {viewTab === 'resolved' ? 'bg-zinc-100 text-zinc-800' : 'text-zinc-500 hover:text-zinc-700'}">Resolved ({taskStats.resolved})</button>
+			<button
+				onclick={() => (viewTab = 'active')}
+				class="rounded px-2.5 py-1 text-sm font-medium transition-colors {viewTab === 'active'
+					? 'bg-zinc-100 text-zinc-800'
+					: 'text-zinc-500 hover:text-zinc-700'}">Active ({taskStats.active})</button
+			>
+			<button
+				onclick={() => (viewTab = 'resolved')}
+				class="rounded px-2.5 py-1 text-sm font-medium transition-colors {viewTab === 'resolved'
+					? 'bg-zinc-100 text-zinc-800'
+					: 'text-zinc-500 hover:text-zinc-700'}">Resolved ({taskStats.resolved})</button
+			>
 		</div>
 		{#if taskStats.overdue > 0}
 			<span class="text-xs text-red-500">{taskStats.overdue} overdue</span>

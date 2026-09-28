@@ -5,16 +5,16 @@ export interface User {
 	photoUrl: string;
 	isApproved: boolean;
 	userType: 'member' | 'collaborator';
-	createdAt: Date | string;
-	lastLoginAt: Date | string;
+	createdAt: string;
+	lastLoginAt: string;
 }
 
 export interface IUserService {
-	getAllUsers(): Promise<User[]> | User[];
-	getApprovedUsers(): Promise<User[]> | User[];
-	getUnapprovedUsers(): Promise<User[]> | User[];
-	getCollaboratorUsers(): Promise<User[]> | User[]; // For project invitation dropdown
-	approveUser(userId: string, userType: 'member' | 'collaborator'): Promise<boolean> | boolean;
-	updateUserType(userId: string, userType: 'member' | 'collaborator'): Promise<boolean> | boolean;
-	getUser(userId: string): Promise<User | null> | User | null;
+	getAllUsers(): Promise<User[]>;
+	getApprovedUsers(): Promise<User[]>;
+	getUnapprovedUsers(): Promise<User[]>;
+	getCollaboratorUsers(): Promise<User[]>; // For project invitation dropdown
+	approveUser(userId: string, userType: 'member' | 'collaborator'): Promise<boolean>;
+	updateUserType(userId: string, userType: 'member' | 'collaborator'): Promise<boolean>;
+	getUser(userId: string): Promise<User | null>;
 }

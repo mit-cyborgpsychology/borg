@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
+	import { getAppServices } from '$lib/app/context';
 	import { Handle, Position } from '@xyflow/svelte';
 	import { Edit, Trash2, FileText, ExternalLink } from '@lucide/svelte';
-	import { outlineService } from '../../services/instances';
 
+	const { outlineService } = getAppServices();
 	let { data, id } = $props<{
 		data: any;
 		id: string;
@@ -28,21 +31,17 @@
 
 	function handleEdit(e: MouseEvent) {
 		e.stopPropagation();
-		const event = new CustomEvent('nodeEdit', {
-			detail: {
-				nodeId: id,
-				nodeData: nodeData,
-				templateType: data.templateType
-			}
+		canvasActions.nodeEdit({
+			nodeId: id,
+			nodeData: nodeData,
+			templateType: data.templateType
 		});
-		document.dispatchEvent(event);
 	}
 
 	function handleDelete(e: MouseEvent) {
 		e.stopPropagation();
 		if (confirm('Are you sure you want to delete this outline node?')) {
-			const event = new CustomEvent('nodeDelete', { detail: { nodeId: id } });
-			document.dispatchEvent(event);
+			canvasActions.nodeDelete({ nodeId: id });
 		}
 	}
 
@@ -72,15 +71,12 @@
 
 			data.nodeData = updatedNodeData;
 
-			const event = new CustomEvent('nodeUpdate', {
-				detail: {
-					nodeId: id,
-					data: {
-						nodeData: updatedNodeData
-					}
+			canvasActions.nodeUpdate({
+				nodeId: id,
+				data: {
+					nodeData: updatedNodeData
 				}
 			});
-			document.dispatchEvent(event);
 
 			window.open(doc.url, '_blank');
 		} finally {
@@ -113,7 +109,7 @@
 
 		<!-- Open doc button -->
 		<button
-			class="mt-2 w-full rounded-lg bg-borg-brown/80 p-2 text-xs font-medium transition-colors hover:bg-borg-brown/60 focus:outline-none focus:ring-2 focus:ring-borg-blue disabled:opacity-50"
+			class="mt-2 w-full rounded-lg bg-borg-brown/80 p-2 text-xs font-medium transition-colors hover:bg-borg-brown/60 focus:ring-2 focus:ring-borg-blue focus:outline-none disabled:opacity-50"
 			onclick={handleOpenDoc}
 			disabled={isCreating}
 		>

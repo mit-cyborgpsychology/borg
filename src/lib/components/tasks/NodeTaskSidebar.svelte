@@ -1,10 +1,15 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
+	import { getAppServices } from '$lib/app/context';
 	import { X, Plus, ChevronDown, ChevronRight } from '@lucide/svelte';
-	import { taskService } from '../../services/instances';
 	import type { Task } from '../../types/task';
 	import TaskList from './TaskList.svelte';
-	import { onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
+	import { createResource } from '$lib/state/resource';
+	import AsyncStatus from '../AsyncStatus.svelte';
 
+	const { taskService } = getAppServices();
 	interface Props {
 		nodeId: string;
 		nodeTitle: string;
@@ -19,47 +24,27 @@
 	// Active tasks are passed as props
 	const activeTasks = $derived(tasks);
 
-	// Fetch resolved tasks for this specific node
-	let resolvedTasks = $state<Task[]>([]);
+	const resolvedResource = createResource<Task[]>([]);
+	let resolvedTasks = $derived($resolvedResource.data);
 	let showResolved = $state(false);
-
-	onMount(() => {
-		loadResolvedTasks();
-	});
-
+	onDestroy(() => resolvedResource.dispose());
 	async function loadResolvedTasks() {
-		console.log('NodeTaskSidebar: Loading resolved tasks for node:', nodeId);
-		// Get all resolved tasks and filter for this node
-		const allResolvedResult = taskService.getResolvedTasks();
-		const allResolved =
-			allResolvedResult instanceof Promise ? await allResolvedResult : allResolvedResult;
-		console.log('NodeTaskSidebar: Total resolved tasks from service:', allResolved.length);
-
-		// Filter for this specific node
-		resolvedTasks = allResolved
-			.filter(
-				(task) => task.nodeId === nodeId && (!projectSlug || task.projectSlug === projectSlug)
+		const currentNode = nodeId;
+		const currentProject = projectSlug;
+		await resolvedResource.load(async () =>
+			(await taskService.getResolvedTasks()).filter(
+				(task) =>
+					task.nodeId === currentNode && (!currentProject || task.projectSlug === currentProject)
 			)
-			.map((task) => ({
-				id: task.id,
-				title: task.title,
-				assignee: task.assignee,
-				dueDate: task.dueDate,
-				notes: task.notes,
-				createdAt: task.createdAt,
-				status: task.status
-			}));
-		console.log('NodeTaskSidebar: Filtered resolved tasks for this node:', resolvedTasks.length);
+		);
 	}
-
-	// Reload resolved tasks when active tasks change (indicating updates)
 	$effect(() => {
-		if (tasks.length >= 0) {
-			// Triggers whenever tasks prop changes
-			loadResolvedTasks();
-		}
+		tasks;
+		void loadResolvedTasks();
 	});
 </script>
+
+<AsyncStatus state={$resolvedResource} onRetry={() => void loadResolvedTasks()} />
 
 <div class="flex h-[calc(100vh-64px)] w-80 flex-col border-l border-zinc-200 bg-white">
 	<!-- Sidebar Header -->
@@ -82,10 +67,7 @@
 			</div>
 			<button
 				onclick={() => {
-					const customEvent = new CustomEvent('addTask', {
-						detail: { nodeId }
-					});
-					document.dispatchEvent(customEvent);
+					canvasActions.addTask({ nodeId });
 				}}
 				class="flex items-center gap-1 rounded-lg border border-zinc-200 bg-borg-beige px-3 py-1.5 text-xs text-black transition-colors hover:bg-black hover:text-white"
 			>
@@ -108,10 +90,7 @@
 				<p class="mb-4 text-sm text-zinc-500">Add your first task to get started</p>
 				<button
 					onclick={() => {
-						const customEvent = new CustomEvent('addTask', {
-							detail: { nodeId }
-						});
-						document.dispatchEvent(customEvent);
+						canvasActions.addTask({ nodeId });
 					}}
 					class="rounded-lg border border-zinc-200 bg-borg-beige px-4 py-2 text-sm text-black transition-colors hover:bg-black hover:text-white"
 				>

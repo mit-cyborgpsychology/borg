@@ -1,19 +1,21 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { getAppServices } from '$lib/app/context';
+	import { onMount, onDestroy } from 'svelte';
+	import { createTaskLogState } from '../../features/tasks/createTaskLogState';
+	import AsyncStatus from '../AsyncStatus.svelte';
 	import { Clock } from '@lucide/svelte';
-	import type { ITaskService } from '../../services/interfaces/ITaskService';
 	import type { TaskWithContext } from '../../types/task';
-	import { authStore } from '../../stores/authStore';
 	import HierarchicalTaskView from './HierarchicalTaskView.svelte';
-	import { joinTaskContext } from '../../services/taskContext';
 
-	let { taskService } = $props<{
-		taskService: ITaskService;
-	}>();
+	const { taskService, authStore } = getAppServices();
+	const { joinTaskContext } = getAppServices().taskContext;
 
-	let logTasks = $state<TaskWithContext[]>([]);
-	let filteredLogTasks = $state<TaskWithContext[]>([]);
-	let dataLoaded = $state(false);
+	const featureState = createTaskLogState(taskService, joinTaskContext);
+	const resource = featureState.list;
+	onDestroy(() => featureState.dispose());
+	let logTasks = $derived($resource.data);
+	let filteredLogTasks = $derived(logTasks);
+	let dataLoaded = $derived($resource.status !== 'idle');
 	let viewMode = $state<'grouped' | 'all'>('all');
 
 	onMount(() => {
@@ -21,54 +23,8 @@
 	});
 
 	async function loadLogTasks() {
-		const currentUser = $authStore.user;
-		if (!currentUser) return;
-
-		try {
-			let personId = currentUser.uid || currentUser.email || '';
-
-			// Use the efficient method if available, otherwise fall back to filtering all resolved tasks
-			let userResolvedTasks: TaskWithContext[];
-
-			if (taskService.getPersonResolvedTasksLog) {
-				const result = taskService.getPersonResolvedTasksLog(personId, 30);
-				userResolvedTasks = result instanceof Promise ? await result : result;
-			} else {
-				// Fallback for services that don't implement the new method
-				const result = taskService.getResolvedTasks();
-				const allResolvedTasks = result instanceof Promise ? await result : result;
-
-				const thirtyDaysAgo = new Date();
-				thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-				userResolvedTasks = allResolvedTasks.filter((task: TaskWithContext) => {
-					if (task.assignee !== personId || task.status !== 'resolved') return false;
-
-					const taskDate = task.updatedAt ? new Date(task.updatedAt) : new Date(task.createdAt);
-					return taskDate >= thirtyDaysAgo;
-				});
-
-				userResolvedTasks.sort((a: TaskWithContext, b: TaskWithContext) => {
-					const dateA = a.updatedAt ? new Date(a.updatedAt) : new Date(a.createdAt);
-					const dateB = b.updatedAt ? new Date(b.updatedAt) : new Date(b.createdAt);
-					return dateB.getTime() - dateA.getTime();
-				});
-			}
-
-			logTasks = userResolvedTasks;
-			filteredLogTasks = userResolvedTasks;
-			dataLoaded = true;
-
-			joinTaskContext(userResolvedTasks).then((joined) => {
-				logTasks = joined;
-				filteredLogTasks = joined;
-			});
-		} catch (error) {
-			console.error('Failed to load task log:', error);
-			logTasks = [];
-			filteredLogTasks = [];
-			dataLoaded = true;
-		}
+		const user = $authStore.user;
+		if (user) await featureState.load(user.uid);
 	}
 
 	async function handleReactivateTask(task: TaskWithContext) {
@@ -78,18 +34,20 @@
 			{ status: 'active' } as any,
 			task.projectSlug
 		);
-		if (result instanceof Promise) await result;
+		await result;
 		await loadLogTasks(); // Reload tasks
 	}
 
 	async function handleDeleteTask(task: TaskWithContext) {
 		if (confirm('Are you sure you want to delete this task permanently?')) {
 			const result = taskService.deleteTask(task.nodeId, task.id, task.projectSlug);
-			if (result instanceof Promise) await result;
+			await result;
 			await loadLogTasks(); // Reload tasks
 		}
 	}
 </script>
+
+<AsyncStatus state={$resource} onRetry={() => void loadLogTasks()} />
 
 <div class="flex h-full flex-col">
 	<div class="mb-4 flex items-center justify-between">

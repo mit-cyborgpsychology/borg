@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { authStore } from '../stores/authStore';
-	import type { User } from 'firebase/auth';
+	import type { PresenceConnection } from '../services/interfaces/IPresenceService';
+	import { getAppServices } from '$lib/app/context';
+	import { untrack } from 'svelte';
+	import type { AuthUser as User } from '../services/interfaces/IAuthService';
 
+	const { presenceService, authStore } = getAppServices();
 	interface CursorData {
 		x: number; // XYFlow canvas coordinate (not screen coordinate)
 		y: number; // XYFlow canvas coordinate (not screen coordinate)
@@ -27,7 +29,7 @@
 	}>();
 
 	let otherCursors: Map<string, CursorUser> = $state(new Map());
-	let ws: WebSocket | null = null;
+	let ws: PresenceConnection | null = null;
 	let currentUser: User | null = $state(null);
 	let isConnected = $state(false);
 	let userColor = $state('');
@@ -61,39 +63,18 @@
 		return colors[Math.floor(Math.random() * colors.length)];
 	}
 
-	// Connect to WebSocket
 	function connectWebSocket() {
 		if (!currentUser || !projectSlug) return;
-
-		// Always use wss for PartyKit deployed URLs
-		const wsUrl = `wss://borg-cursors.chayapatr.partykit.dev/party/${projectSlug}`;
-
-		ws = new WebSocket(wsUrl);
-
-		ws.onopen = () => {
-			isConnected = true;
-			console.log('Cursor WebSocket connected');
-		};
-
-		ws.onmessage = (event) => {
-			try {
-				const data = JSON.parse(event.data);
-				handleWebSocketMessage(data);
-			} catch (error) {
-				console.error('Failed to parse WebSocket message:', error);
-			}
-		};
-
-		ws.onclose = () => {
-			isConnected = false;
-			console.log('Cursor WebSocket disconnected');
-			// Reconnect after a delay
-			setTimeout(connectWebSocket, 3000);
-		};
-
-		ws.onerror = (error) => {
-			console.error('Cursor WebSocket error:', error);
-		};
+		ws = presenceService.connect(projectSlug, {
+			connected: () => {
+				isConnected = true;
+			},
+			disconnected: () => {
+				isConnected = false;
+			},
+			message: handleWebSocketMessage,
+			error: (error) => console.error('Cursor connection failed:', error)
+		});
 	}
 
 	// Handle WebSocket messages
@@ -154,7 +135,7 @@
 
 	// Send cursor position
 	function sendCursorPosition(x: number, y: number, pointer: 'mouse' | 'touch') {
-		if (!ws || ws.readyState !== WebSocket.OPEN || !currentUser) return;
+		if (!ws || !currentUser) return;
 
 		const cursorData: CursorData = {
 			x,
@@ -165,12 +146,10 @@
 			color: userColor
 		};
 
-		ws.send(
-			JSON.stringify({
-				type: 'cursor_update',
-				...cursorData
-			})
-		);
+		ws.send({
+			type: 'cursor_update',
+			...cursorData
+		});
 	}
 
 	// Mouse/touch tracking
@@ -194,13 +173,11 @@
 	}
 
 	function handleMouseLeave() {
-		if (!ws || ws.readyState !== WebSocket.OPEN || !currentUser) return;
-		ws.send(
-			JSON.stringify({
-				type: 'cursor_leave',
-				userId: currentUser.uid
-			})
-		);
+		if (!ws || !currentUser) return;
+		ws.send({
+			type: 'cursor_leave',
+			userId: currentUser.uid
+		});
 	}
 
 	function startTracking() {
@@ -230,36 +207,25 @@
 		otherCursors = new Map(otherCursors); // Trigger reactivity
 	}
 
-	onMount(() => {
-		if (currentUser && projectSlug) {
-			connectWebSocket();
-			startTracking();
-
-			// Cleanup stale cursors every 10 seconds
-			const cleanupInterval = setInterval(cleanupStaleCursors, 10000);
-
-			return () => {
-				clearInterval(cleanupInterval);
-			};
-		}
-	});
-
-	onDestroy(() => {
-		stopTracking();
-		if (ws) {
-			ws.close();
-		}
-	});
-
-	// Reactive connection setup
 	$effect(() => {
-		if (currentUser && projectSlug && !ws) {
+		// Reconnect when the room or signed-in account changes.
+		const userId = currentUser?.uid;
+		const room = projectSlug;
+		if (!userId || !room) return;
+		untrack(() => {
 			connectWebSocket();
 			startTracking();
-		} else if (!currentUser && ws) {
-			ws.close();
+		});
+		const connection = ws;
+		const cleanupInterval = setInterval(cleanupStaleCursors, 10000);
+		return () => {
+			clearInterval(cleanupInterval);
 			stopTracking();
-		}
+			connection?.close();
+			ws = null;
+			isConnected = false;
+			otherCursors = new Map();
+		};
 	});
 </script>
 

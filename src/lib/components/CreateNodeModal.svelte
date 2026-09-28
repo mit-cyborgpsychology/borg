@@ -13,25 +13,28 @@
 		Monitor
 	} from '@lucide/svelte';
 
-	let { position, onCreate, onClose } = $props<{
+	let {
+		position,
+		onCreate,
+		onClose,
+		error = null
+	} = $props<{
 		position: { x: number; y: number };
-		onCreate: (templateType: string) => void;
+		onCreate: (templateType: string) => Promise<void>;
+		error?: string | null;
 		onClose: () => void;
 	}>();
 
 	let isCreating = $state(false);
 
-	function handleCreateNode(templateType: string) {
-		// Prevent double-clicks
+	async function handleCreateNode(templateType: string) {
 		if (isCreating) return;
 		isCreating = true;
-
-		onCreate(templateType);
-
-		// Reset after a short delay to allow for normal modal closure
-		setTimeout(() => {
+		try {
+			await onCreate(templateType);
+		} finally {
 			isCreating = false;
-		}, 100);
+		}
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
@@ -99,9 +102,12 @@
 			{/each}
 		</div>
 
+		{#if error}<p role="alert" class="py-2 text-sm text-red-700">{error}</p>{/if}
 		<div class="mt-6 flex items-center justify-between">
 			<div class="text-xs text-zinc-600">
-				Press <kbd class="rounded border border-zinc-200 bg-zinc-100 px-2 py-1 text-black">Escape</kbd>
+				Press <kbd class="rounded border border-zinc-200 bg-zinc-100 px-2 py-1 text-black"
+					>Escape</kbd
+				>
 				to cancel
 			</div>
 			<button

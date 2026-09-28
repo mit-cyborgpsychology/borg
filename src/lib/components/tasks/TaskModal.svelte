@@ -1,9 +1,12 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { createTaskFormState } from '../../features/tasks/createTaskFormState';
+	import AsyncStatus from '../AsyncStatus.svelte';
+	import { getAppServices } from '$lib/app/context';
 	import { X } from '@lucide/svelte';
-	import { peopleService, taskService } from '../../services/instances';
 	import type { Task } from '../../types/task';
-	import { authStore } from '../../stores/authStore';
 
+	const { authStore, peopleService, taskService } = getAppServices();
 	interface Props {
 		nodeId: string;
 		projectSlug?: string;
@@ -14,67 +17,47 @@
 	}
 
 	let { nodeId, projectSlug, task, onClose, onTaskUpdated, onTaskAdded }: Props = $props();
-	let people = $state<any[]>([]);
+	const feature = createTaskFormState(peopleService, taskService);
+	const peopleResource = feature.people;
+	const command = feature.command;
+	let people = $derived($peopleResource.data);
+	onMount(() => {
+		void feature.loadPeople();
+	});
+	onDestroy(() => feature.dispose());
 
 	// Determine if this is edit mode
 	const isEditMode = $derived(!!task);
 	const modalTitle = $derived(isEditMode ? 'Edit Task' : 'Add Task');
 	const submitButtonText = $derived(isEditMode ? 'Save Changes' : 'Add Task');
 
-	// Load people on mount
-	$effect(() => {
-		(async () => {
-			const result = peopleService.getAllPeople();
-			people = result instanceof Promise ? await result : result;
-		})();
-	});
-
 	// Initialize form values
 	let title = $state(task?.title || '');
 	let assignee = $state(task?.assignee || (!task ? $authStore.user?.uid || '' : ''));
 	let dueDate = $state(task?.dueDate || '');
 	let notes = $state(task?.notes || '');
-	let isLoading = $state(false);
+	let isLoading = $derived($command.status === 'loading');
 
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 
 		if (!title.trim()) return;
 
-		isLoading = true;
-
-		try {
-			if (isEditMode && task) {
-				// Edit mode - update existing task
-				const updates: Partial<Task> = {
-					title: title.trim(),
-					assignee: assignee || '',
-					dueDate: dueDate && dueDate.trim() ? dueDate.trim() : '',
-					notes: notes && notes.trim() ? notes.trim() : ''
-				};
-
-				const result = taskService.updateTask(nodeId, task.id, updates, projectSlug);
-				if (result instanceof Promise) await result;
-				onTaskUpdated?.();
-			} else {
-				// Add mode - create new task
-				const taskData: Omit<Task, 'id' | 'createdAt'> = {
-					title: title.trim(),
-					assignee: assignee || '',
-					dueDate: dueDate && dueDate.trim() ? dueDate.trim() : '',
-					notes: notes && notes.trim() ? notes.trim() : ''
-				};
-
-				const result = taskService.addTask(nodeId, taskData, projectSlug);
-				if (result instanceof Promise) await result;
-				onTaskAdded?.();
-			}
-
+		const result = await feature.save(
+			nodeId,
+			projectSlug,
+			{
+				title: title.trim(),
+				assignee: assignee || '',
+				dueDate: dueDate.trim(),
+				notes: notes.trim()
+			},
+			task?.id
+		);
+		if (result.ok) {
+			if (task) onTaskUpdated?.();
+			else onTaskAdded?.();
 			onClose();
-		} catch (error) {
-			console.error('Error saving task:', error);
-		} finally {
-			isLoading = false;
 		}
 	}
 </script>
@@ -91,6 +74,8 @@
 			</button>
 		</div>
 
+		<AsyncStatus state={$peopleResource} onRetry={() => void feature.loadPeople()} />
+		<AsyncStatus state={$command} pendingLabel="Saving…" />
 		<form onsubmit={handleSubmit} class="space-y-4">
 			<div>
 				<label for="title" class="mb-1 block text-sm font-medium text-zinc-600">
@@ -159,10 +144,12 @@
 				<button
 					type="submit"
 					disabled={!title.trim() || isLoading}
-					class="flex-1 rounded-lg bg-borg-orange px-4 py-2 text-white hover:bg-borg-orange disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
+					class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-borg-orange px-4 py-2 text-white hover:bg-borg-orange disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					{#if isLoading}
-						<div class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+						<div
+							class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+						></div>
 						Saving...
 					{:else}
 						{submitButtonText}

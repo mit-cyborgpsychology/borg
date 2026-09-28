@@ -1,8 +1,13 @@
+import { createResource } from '../state/resource';
 import { SvelteMap } from 'svelte/reactivity';
 import type { TaskWithContext } from '../types/task';
-import { taskService } from '../services/instances';
+import type { ITaskService } from '../services/interfaces/ITaskService';
 
 export class ProjectStore {
+	constructor(
+		private taskService: Pick<ITaskService, 'getProjectTasks' | 'subscribeToProjectTasks'>
+	) {}
+
 	projectSlug: string | null = $state(null);
 
 	tasks = $state.raw<TaskWithContext[]>([]);
@@ -23,7 +28,10 @@ export class ProjectStore {
 
 	taskCounts = $derived.by(() => ({ total: this.tasks.length }));
 
-	private unsubTasks: (() => void) | null = null;
+	readonly resource = createResource<TaskWithContext[]>([]);
+	status = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+	error = $state<string | null>(null);
+	private stopObserving: (() => void) | null = null;
 
 	// Plain (non-reactive) fields for reentrancy bookkeeping — these must NOT
 	// be $state, or reading them inside open()/close() (which callers invoke
@@ -31,28 +39,36 @@ export class ProjectStore {
 	// write later in the same call re-triggers the effect: an infinite loop.
 	private currentSlug: string | null = null;
 
-	async open(projectSlug: string) {
-		if (this.currentSlug === projectSlug && this.unsubTasks) return;
-
+	open(projectSlug: string) {
+		if (this.currentSlug === projectSlug) return;
 		this.close();
 		this.currentSlug = projectSlug;
 		this.projectSlug = projectSlug;
-
-		if (taskService.subscribeToProjectTasks) {
-			this.unsubTasks = taskService.subscribeToProjectTasks(projectSlug, (tasks) => {
-				this.tasks = tasks;
-			});
+		this.stopObserving = this.resource.subscribe((state) => {
+			this.tasks = state.data;
+			this.status = state.status;
+			this.error = state.error;
+		});
+		if (this.taskService.subscribeToProjectTasks) {
+			this.resource.connect((next, error) =>
+				this.taskService.subscribeToProjectTasks!(projectSlug, next, error)
+			);
 		} else {
-			const result = taskService.getProjectTasks(projectSlug);
-			this.tasks = result instanceof Promise ? await result : result;
+			void this.resource.load(() => this.taskService.getProjectTasks(projectSlug));
 		}
 	}
 
+	retry() {
+		const slug = this.currentSlug;
+		if (!slug) return;
+		this.close();
+		this.open(slug);
+	}
+
 	close() {
-		if (this.unsubTasks) {
-			this.unsubTasks();
-			this.unsubTasks = null;
-		}
+		this.resource.reset();
+		this.stopObserving?.();
+		this.stopObserving = null;
 		this.currentSlug = null;
 		this.projectSlug = null;
 		this.tasks = [];

@@ -17,6 +17,47 @@ export default ts.config(
 	prettier,
 	...svelte.configs.prettier,
 	{
+		files: ['src/lib/components/**/*.svelte', 'src/routes/**/+page.svelte'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['firebase', 'firebase/*', '**/firebase/*', '**/services/instances'],
+							message:
+								'Views receive application services through app/context; keep persistence in adapters.'
+						}
+					]
+				}
+			]
+		}
+	},
+	{
+		files: ['src/lib/services/**/*.ts'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: [
+								'svelte',
+								'svelte/*',
+								'**/stores/*',
+								'**/components/*',
+								'**/app/*',
+								'**/instances'
+							],
+							message:
+								'Services depend on injected contracts, never UI state or application composition.'
+						}
+					]
+				}
+			]
+		}
+	},
+	{
 		languageOptions: {
 			globals: { ...globals.browser, ...globals.node }
 		},

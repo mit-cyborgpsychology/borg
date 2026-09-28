@@ -8,50 +8,52 @@ import {
 	where,
 	orderBy
 } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { readUserDocument } from './userDocument';
+import type { Firestore } from 'firebase/firestore';
 import type { User, IUserService } from '../interfaces/IUserService';
 
 export class FirebaseUserService implements IUserService {
+	constructor(private db: Firestore) {}
 	async getAllUsers(): Promise<User[]> {
-		const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+		const q = query(collection(this.db, 'users'), orderBy('createdAt', 'desc'));
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as User);
+		return snapshot.docs.map((doc) => readUserDocument(doc.id, doc.data()));
 	}
 
 	async getApprovedUsers(): Promise<User[]> {
 		const q = query(
-			collection(db, 'users'), 
+			collection(this.db, 'users'),
 			where('isApproved', '==', true),
 			orderBy('name', 'asc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as User);
+		return snapshot.docs.map((doc) => readUserDocument(doc.id, doc.data()));
 	}
 
 	async getUnapprovedUsers(): Promise<User[]> {
 		const q = query(
-			collection(db, 'users'), 
+			collection(this.db, 'users'),
 			where('isApproved', '==', false),
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as User);
+		return snapshot.docs.map((doc) => readUserDocument(doc.id, doc.data()));
 	}
 
 	async getCollaboratorUsers(): Promise<User[]> {
 		const q = query(
-			collection(db, 'users'),
+			collection(this.db, 'users'),
 			where('isApproved', '==', true),
 			where('userType', '==', 'collaborator'),
 			orderBy('name', 'asc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }) as User);
+		return snapshot.docs.map((doc) => readUserDocument(doc.id, doc.data()));
 	}
 
 	async approveUser(userId: string, userType: 'member' | 'collaborator'): Promise<boolean> {
 		try {
-			const userRef = doc(db, 'users', userId);
+			const userRef = doc(this.db, 'users', userId);
 			await updateDoc(userRef, {
 				isApproved: true,
 				userType: userType,
@@ -66,7 +68,7 @@ export class FirebaseUserService implements IUserService {
 
 	async updateUserType(userId: string, userType: 'member' | 'collaborator'): Promise<boolean> {
 		try {
-			const userRef = doc(db, 'users', userId);
+			const userRef = doc(this.db, 'users', userId);
 			await updateDoc(userRef, {
 				userType: userType,
 				updatedAt: new Date()
@@ -80,12 +82,12 @@ export class FirebaseUserService implements IUserService {
 
 	async getUser(userId: string): Promise<User | null> {
 		try {
-			const userRef = doc(db, 'users', userId);
+			const userRef = doc(this.db, 'users', userId);
 			const userDoc = await getDoc(userRef);
-			return userDoc.exists() ? ({ ...userDoc.data(), id: userDoc.id } as User) : null;
+			return userDoc.exists() ? readUserDocument(userDoc.id, userDoc.data()) : null;
 		} catch (error) {
 			console.error('Failed to get user:', error);
-			return null;
+			throw error;
 		}
 	}
 }

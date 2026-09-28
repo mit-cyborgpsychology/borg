@@ -1,55 +1,59 @@
-import { 
-	collection, 
-	doc, 
-	addDoc, 
-	updateDoc, 
-	deleteDoc, 
-	getDocs, 
-	query, 
-	orderBy, 
+import {
+	collection,
+	doc,
+	addDoc,
+	updateDoc,
+	deleteDoc,
+	getDocs,
+	query,
+	orderBy,
 	onSnapshot,
-	type Unsubscribe 
+	type Unsubscribe
 } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import type { Firestore } from 'firebase/firestore';
 import type { TimelineEvent, TimelineTemplate } from '../../types/timeline';
 import { getTimelineTemplate, timelineTemplates } from '../../types/timeline';
 import type { ITimelineService } from '../interfaces';
-import { get } from 'svelte/store';
-import { authStore } from '../../stores/authStore';
 
+import type { ReadSession } from '../interfaces/Session';
 export class FirebaseTimelineService implements ITimelineService {
 	private projectId?: string;
 
-	constructor(projectId?: string) {
+	constructor(
+		private db: Firestore,
+		private readSession: ReadSession,
+		projectId?: string
+	) {
 		this.projectId = projectId;
 	}
 
 	async getAllEvents(): Promise<TimelineEvent[]> {
-		const userId = get(authStore).user?.uid;
+		const userId = this.readSession().user?.uid;
 		if (!userId) {
 			throw new Error('User must be authenticated to access timeline');
 		}
-		
-		const collectionPath = this.projectId 
-			? `projects/${this.projectId}/timeline`
-			: 'timeline';
-			
-		const snapshot = await getDocs(collection(db, collectionPath));
-		
-		return snapshot.docs.map(doc => ({
-			...doc.data(),
-			id: doc.id
-		} as TimelineEvent));
+
+		const collectionPath = this.projectId ? `projects/${this.projectId}/timeline` : 'timeline';
+
+		const snapshot = await getDocs(collection(this.db, collectionPath));
+
+		return snapshot.docs.map(
+			(doc) =>
+				({
+					...doc.data(),
+					id: doc.id
+				}) as TimelineEvent
+		);
 	}
 
 	async getEvent(id: string): Promise<TimelineEvent | null> {
 		const events = await this.getAllEvents();
-		return events.find(e => e.id === id) || null;
+		return events.find((e) => e.id === id) || null;
 	}
 
 	async addEvent(templateType: string, eventData: Record<string, unknown>): Promise<TimelineEvent> {
 		const template = getTimelineTemplate(templateType);
-		
+
 		// Initialize default data based on template
 		const initializedData: Record<string, unknown> = {};
 		template.fields.forEach((field) => {
@@ -60,15 +64,13 @@ export class FirebaseTimelineService implements ITimelineService {
 			}
 		});
 
-		const userId = get(authStore).user?.uid;
+		const userId = this.readSession().user?.uid;
 		if (!userId) {
 			throw new Error('User must be authenticated to create timeline events');
 		}
-		
-		const collectionPath = this.projectId 
-			? `projects/${this.projectId}/timeline`
-			: 'timeline';
-		
+
+		const collectionPath = this.projectId ? `projects/${this.projectId}/timeline` : 'timeline';
+
 		const eventDoc = {
 			templateType,
 			title: (initializedData.title as string) || 'Untitled Event',
@@ -80,8 +82,8 @@ export class FirebaseTimelineService implements ITimelineService {
 			projectId: this.projectId || null
 		};
 
-		const docRef = await addDoc(collection(db, collectionPath), eventDoc);
-		
+		const docRef = await addDoc(collection(this.db, collectionPath), eventDoc);
+
 		return {
 			id: docRef.id,
 			...eventDoc
@@ -89,40 +91,36 @@ export class FirebaseTimelineService implements ITimelineService {
 	}
 
 	async updateEvent(id: string, updates: Partial<TimelineEvent>): Promise<TimelineEvent | null> {
-		const userId = get(authStore).user?.uid;
+		const userId = this.readSession().user?.uid;
 		if (!userId) {
 			throw new Error('User must be authenticated to update timeline events');
 		}
-		
-		const collectionPath = this.projectId 
-			? `projects/${this.projectId}/timeline`
-			: 'timeline';
-			
-		const eventRef = doc(db, collectionPath, id);
-		
+
+		const collectionPath = this.projectId ? `projects/${this.projectId}/timeline` : 'timeline';
+
+		const eventRef = doc(this.db, collectionPath, id);
+
 		const updateData = {
 			...updates,
 			updatedAt: new Date().toISOString()
 		};
-		
+
 		await updateDoc(eventRef, updateData);
-		
+
 		const events = await this.getAllEvents();
-		return events.find(e => e.id === id) || null;
+		return events.find((e) => e.id === id) || null;
 	}
 
 	async deleteEvent(id: string): Promise<boolean> {
 		try {
-			const userId = get(authStore).user?.uid;
+			const userId = this.readSession().user?.uid;
 			if (!userId) {
 				throw new Error('User must be authenticated to delete timeline events');
 			}
-			
-			const collectionPath = this.projectId 
-				? `projects/${this.projectId}/timeline`
-				: 'timeline';
-				
-			await deleteDoc(doc(db, collectionPath, id));
+
+			const collectionPath = this.projectId ? `projects/${this.projectId}/timeline` : 'timeline';
+
+			await deleteDoc(doc(this.db, collectionPath, id));
 			return true;
 		} catch (error) {
 			console.error('Failed to delete timeline event:', error);
@@ -148,34 +146,41 @@ export class FirebaseTimelineService implements ITimelineService {
 	}
 
 	subscribeToEvents(callback: (events: TimelineEvent[]) => void): Unsubscribe {
-		const userId = get(authStore).user?.uid;
+		const userId = this.readSession().user?.uid;
 		if (!userId) {
 			throw new Error('User must be authenticated to subscribe to timeline events');
 		}
-		
-		const collectionPath = this.projectId 
-			? `projects/${this.projectId}/timeline`
-			: 'timeline';
-			
-		const q = collection(db, collectionPath);
-		
+
+		const collectionPath = this.projectId ? `projects/${this.projectId}/timeline` : 'timeline';
+
+		const q = collection(this.db, collectionPath);
+
 		return onSnapshot(q, (snapshot) => {
-			const events = snapshot.docs.map(doc => ({
-				...doc.data(),
-				id: doc.id
-			} as TimelineEvent));
+			const events = snapshot.docs.map(
+				(doc) =>
+					({
+						...doc.data(),
+						id: doc.id
+					}) as TimelineEvent
+			);
 			callback(events);
 		});
 	}
 
-	subscribeToProjectEvents(projectId: string, callback: (events: TimelineEvent[]) => void): Unsubscribe {
-		const q = collection(db, `projects/${projectId}/timeline`);
-		
+	subscribeToProjectEvents(
+		projectId: string,
+		callback: (events: TimelineEvent[]) => void
+	): Unsubscribe {
+		const q = collection(this.db, `projects/${projectId}/timeline`);
+
 		return onSnapshot(q, (snapshot) => {
-			const events = snapshot.docs.map(doc => ({
-				...doc.data(),
-				id: doc.id
-			} as TimelineEvent));
+			const events = snapshot.docs.map(
+				(doc) =>
+					({
+						...doc.data(),
+						id: doc.id
+					}) as TimelineEvent
+			);
 			callback(events);
 		});
 	}

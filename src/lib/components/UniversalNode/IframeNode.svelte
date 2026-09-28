@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getCanvasActions } from '$lib/features/canvas/context';
+	const canvasActions = getCanvasActions();
 	import { Handle, Position } from '@xyflow/svelte';
 	import { Edit, Lock, Unlock, Trash2, ExternalLink } from '@lucide/svelte';
 	import { getTemplate } from '../../templates';
@@ -36,21 +38,17 @@
 
 	function handleEdit(e: MouseEvent) {
 		e.stopPropagation();
-		const event = new CustomEvent('nodeEdit', {
-			detail: {
-				nodeId: id,
-				nodeData: nodeData,
-				templateType: data.templateType
-			}
+		canvasActions.nodeEdit({
+			nodeId: id,
+			nodeData: nodeData,
+			templateType: data.templateType
 		});
-		document.dispatchEvent(event);
 	}
 
 	function handleDelete(e: MouseEvent) {
 		e.stopPropagation();
 		if (confirm('Are you sure you want to delete this iframe node?')) {
-			const event = new CustomEvent('nodeDelete', { detail: { nodeId: id } });
-			document.dispatchEvent(event);
+			canvasActions.nodeDelete({ nodeId: id });
 		}
 	}
 
@@ -67,15 +65,12 @@
 		data.nodeData = updatedNodeData;
 
 		// Dispatch update event
-		const event = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: updatedNodeData
-				}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: updatedNodeData
 			}
 		});
-		document.dispatchEvent(event);
 	}
 
 	function openInNewTab(e: MouseEvent) {
@@ -141,15 +136,12 @@
 		data.nodeData = updatedNodeData;
 
 		// Dispatch update event
-		const event = new CustomEvent('nodeUpdate', {
-			detail: {
-				nodeId: id,
-				data: {
-					nodeData: updatedNodeData
-				}
+		canvasActions.nodeUpdate({
+			nodeId: id,
+			data: {
+				nodeData: updatedNodeData
 			}
 		});
-		document.dispatchEvent(event);
 	}
 
 	// Get a clean URL for iframe src

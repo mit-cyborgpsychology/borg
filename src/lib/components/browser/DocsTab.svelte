@@ -1,24 +1,28 @@
 <script lang="ts">
-	import type { IOutlineService, OutlineDocSummary } from '../../services/interfaces/IOutlineService';
-	import type { IProjectsService } from '../../services/interfaces/IProjectsService';
-	import type { ITaskService } from '../../services/interfaces/ITaskService';
-	import type { Project } from '../../types/project';
-	import type { TaskWithContext } from '../../types/task';
+	import { onDestroy } from 'svelte';
+	import { createDocsState } from '../../features/docs/createDocsState';
+	import AsyncStatus from '../AsyncStatus.svelte';
+	import StatusOverlay from '../StatusOverlay.svelte';
+	import { getAppServices } from '$lib/app/context';
+	import type { OutlineDocSummary } from '../../services/interfaces/IOutlineService';
 	import { FileText, Activity } from '@lucide/svelte';
 
-	let { outlineService, projectsService, taskService, activeTab } = $props<{
-		outlineService: IOutlineService;
-		projectsService: IProjectsService;
-		taskService: ITaskService;
+	const { outlineService, projectsService, taskService } = getAppServices();
+	const featureState = createDocsState(outlineService, projectsService, taskService);
+	const resource = featureState.list;
+	onDestroy(() => featureState.dispose());
+
+	let { activeTab } = $props<{
 		activeTab: string;
 	}>();
 
-	let docs = $state<OutlineDocSummary[]>([]);
-	let activity = $state<TaskWithContext[]>([]);
-	let projectByCollectionId = $state<Map<string, Project>>(new Map());
+	let docs = $derived($resource.data.docs);
+	const activityResource = featureState.activity;
+	let activity = $derived($activityResource.data);
+	let projectByCollectionId = $derived($resource.data.projects);
 	let searchQuery = $state('');
-	let dataLoaded = $state(false);
-	let loading = $state(false);
+	let dataLoaded = $derived($resource.status !== 'idle');
+	let loading = $derived($resource.status === 'loading');
 
 	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -30,42 +34,14 @@
 	});
 
 	async function loadDocs(query = '') {
-		loading = true;
-		try {
-			const projects: Project[] = await projectsService.getAllProjects();
-			const map = new Map<string, Project>();
-			const collectionIds: string[] = [];
-			for (const project of projects) {
-				if (project.outlineCollectionId) {
-					map.set(project.outlineCollectionId, project);
-					collectionIds.push(project.outlineCollectionId);
-				}
-			}
-			projectByCollectionId = map;
-
-			docs = query
-				? await outlineService.searchDocs(query)
-				: await outlineService.listDocs(collectionIds);
-
-			dataLoaded = true;
-		} catch (error) {
-			console.error('Failed to load Outline docs:', error);
-		} finally {
-			loading = false;
-		}
+		await featureState.load(query);
 	}
-
 	async function loadActivity() {
-		try {
-			const allTasks = await taskService.getAllTasks();
-			activity = allTasks
-				.filter((t: TaskWithContext) => t.sourceType === 'outline')
-				.sort((a: TaskWithContext, b: TaskWithContext) => (a.createdAt < b.createdAt ? 1 : -1))
-				.slice(0, 20);
-		} catch (error) {
-			console.error('Failed to load Outline activity:', error);
-		}
+		await featureState.loadActivity();
 	}
+	onDestroy(() => {
+		if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+	});
 
 	function handleSearchInput() {
 		if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
@@ -88,9 +64,15 @@
 	}
 </script>
 
+<StatusOverlay>
+	<AsyncStatus state={$resource} onRetry={() => void loadDocs(searchQuery.trim())} />
+</StatusOverlay>
+
 <div class="flex h-full w-full flex-col overflow-hidden">
 	<!-- Toolbar -->
-	<div class="flex w-full flex-shrink-0 items-center gap-2 border-b border-borg-brown bg-borg-beige px-4 py-2">
+	<div
+		class="flex w-full flex-shrink-0 items-center gap-2 border-b border-borg-brown bg-borg-beige px-4 py-2"
+	>
 		<input
 			bind:value={searchQuery}
 			oninput={handleSearchInput}
@@ -106,7 +88,9 @@
 			<p class="mb-2 text-xs font-medium text-zinc-400">Documents ({docs.length})</p>
 			{#if loading}
 				<div class="flex items-center gap-2 p-4 text-sm text-zinc-400">
-					<div class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-transparent"></div>
+					<div
+						class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-transparent"
+					></div>
 					Loading...
 				</div>
 			{:else if docs.length === 0}
@@ -122,7 +106,9 @@
 							class="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-borg-beige"
 						>
 							<div class="min-w-0">
-								<p class="truncate text-sm font-medium text-zinc-800">{doc.title || 'Untitled Doc'}</p>
+								<p class="truncate text-sm font-medium text-zinc-800">
+									{doc.title || 'Untitled Doc'}
+								</p>
 								<p class="truncate text-xs text-zinc-400">{projectNameFor(doc)}</p>
 							</div>
 							<p class="flex-shrink-0 pl-3 text-xs text-zinc-400">{formatDate(doc.updatedAt)}</p>
@@ -145,7 +131,12 @@
 					{#each activity as task}
 						<div class="rounded-lg border border-zinc-200 bg-white px-3 py-2.5">
 							<div class="flex items-center justify-between gap-3">
-								<p class="min-w-0 truncate text-sm font-medium text-zinc-800 {task.status === 'resolved' ? 'text-zinc-400 line-through' : ''}">
+								<p
+									class="min-w-0 truncate text-sm font-medium text-zinc-800 {task.status ===
+									'resolved'
+										? 'text-zinc-400 line-through'
+										: ''}"
+								>
 									{task.title}
 								</p>
 								<p class="flex-shrink-0 text-xs text-zinc-400">{formatDate(task.createdAt)}</p>
