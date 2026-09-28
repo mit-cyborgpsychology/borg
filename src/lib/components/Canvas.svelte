@@ -64,7 +64,7 @@
 	import type { INodesService } from '../services/interfaces';
 	import EditPanel from './EditPanel.svelte';
 	import NodeTaskSidebar from './tasks/NodeTaskSidebar.svelte';
-	import TaskModal from './tasks/TaskModal.svelte';
+	import TaskEditor from './tasks/TaskEditor.svelte';
 	import TaskList from './tasks/TaskList.svelte';
 	import Toolbar from './Toolbar.svelte';
 	import StickerPanel from './stickers/StickerPanel.svelte';
@@ -148,10 +148,10 @@
 	let matchingNodeIds = $state<string[]>([]);
 	let currentMatchIndex = $state(0);
 
-	// Task modal state
-	let showTaskModal = $state(false);
-	let taskModalNodeId = $state('');
-	let taskModalTask = $state<Task | undefined>(undefined); // undefined for add mode, Task for edit mode
+	// Task editor state
+	let showTaskEditor = $state(false);
+	let taskEditorNodeId = $state('');
+	let taskEditorTask = $state<Task | undefined>(undefined); // undefined for add mode, Task for edit mode
 
 	// Right sidebar toggle state
 	let showRightSidebar = $state(true);
@@ -419,18 +419,22 @@
 		taskSidebarNodeId = payload.nodeId;
 		taskSidebarNodeTitle = payload.nodeTitle;
 		showNodeTaskSidebar = true;
+		showTaskEditor = false;
+		showRightSidebar = true;
+		sidebarTab = 'tasks';
 		// Notify parent to close other panels
 		onPanelOpen?.();
 
 		// Close other panels if open to avoid conflicts
 		showEditPanel = false;
-		if (sidebarTab === 'stickers') sidebarTab = 'nodes';
 	};
 
 	const handleAddTaskEvent = (payload: CanvasPayloads['addTask']) => {
-		taskModalNodeId = payload.nodeId;
-		taskModalTask = undefined; // undefined = add mode
-		showTaskModal = true;
+		taskEditorNodeId = payload.nodeId;
+		taskEditorTask = undefined; // undefined = add mode
+		showTaskEditor = true;
+		showRightSidebar = true;
+		sidebarTab = 'tasks';
 	};
 
 	const handleAddStickerEvent = (payload: CanvasPayloads['addSticker']) => {
@@ -444,9 +448,11 @@
 		nodeTasksOpen: handleNodeTasksOpenEvent,
 		addTask: handleAddTaskEvent,
 		editTask: ({ nodeId, task }) => {
-			taskModalNodeId = nodeId;
-			taskModalTask = task;
-			showTaskModal = true;
+			taskEditorNodeId = nodeId;
+			taskEditorTask = task;
+			showTaskEditor = true;
+			showRightSidebar = true;
+			sidebarTab = 'tasks';
 		},
 		addSticker: handleAddStickerEvent
 	});
@@ -793,9 +799,9 @@
 		void saveCanvas();
 	}
 
-	// Handle task modal completion
-	function handleTaskModalComplete() {
-		showTaskModal = false;
+	// Handle task editor completion
+	function handleTaskEditorComplete() {
+		showTaskEditor = false;
 	}
 
 	async function createSyncedProjectNode(position: { x: number; y: number }) {
@@ -1120,19 +1126,6 @@
 				{/if}
 			</SvelteFlow>
 		</div>
-
-		<!-- Node Task Sidebar (overlay on canvas) -->
-		{#if showNodeTaskSidebar}
-			<div class="absolute inset-y-0 right-0 z-40 flex">
-				<NodeTaskSidebar
-					nodeId={taskSidebarNodeId}
-					nodeTitle={taskSidebarNodeTitle}
-					{projectSlug}
-					tasks={taskSidebarTasks}
-					onClose={() => (showNodeTaskSidebar = false)}
-				/>
-			</div>
-		{/if}
 	</div>
 
 	<!-- Right Sidebar -->
@@ -1171,6 +1164,8 @@
 						<button
 							onclick={() => {
 								sidebarTab = 'tasks';
+								showNodeTaskSidebar = false;
+								showTaskEditor = false;
 								showEditPanel = false;
 							}}
 							class="flex-1 rounded py-1 font-medium transition-colors {sidebarTab === 'tasks'
@@ -1253,6 +1248,25 @@
 				<!-- Content -->
 				{#if sidebarTab === 'stickers'}
 					<StickerPanel onClose={() => (sidebarTab = 'nodes')} />
+				{:else if sidebarTab === 'tasks' && showTaskEditor}
+					<div class="min-h-0 flex-1 overflow-auto p-3">
+						{#key taskEditorTask?.id ?? taskEditorNodeId}<TaskEditor
+								nodeId={taskEditorNodeId}
+								{projectSlug}
+								task={taskEditorTask}
+								onClose={() => (showTaskEditor = false)}
+								onTaskAdded={handleTaskEditorComplete}
+								onTaskUpdated={handleTaskEditorComplete}
+							/>{/key}
+					</div>
+				{:else if sidebarTab === 'tasks' && showNodeTaskSidebar}
+					<NodeTaskSidebar
+						nodeId={taskSidebarNodeId}
+						nodeTitle={taskSidebarNodeTitle}
+						{projectSlug}
+						tasks={taskSidebarTasks}
+						onClose={() => (showNodeTaskSidebar = false)}
+					/>
 				{:else if sidebarTab === 'tasks'}
 					<!-- Task list -->
 					<div class="min-h-0 flex-1 overflow-y-auto">
@@ -1336,17 +1350,6 @@
 		{/if}
 	</div>
 </div>
-
-{#if showTaskModal}
-	<TaskModal
-		nodeId={taskModalNodeId}
-		{projectSlug}
-		task={taskModalTask}
-		onClose={() => (showTaskModal = false)}
-		onTaskAdded={handleTaskModalComplete}
-		onTaskUpdated={handleTaskModalComplete}
-	/>
-{/if}
 
 <!-- Real-time cursors -->
 <Cursor {projectSlug} {screenToFlowPosition} {flowToScreenPosition} />

@@ -1,101 +1,67 @@
 <script lang="ts">
+	import { untrack, onDestroy } from 'svelte';
+	import { createTimelineState } from '$lib/features/timeline/createTimelineState';
+	import type { TimelineEvent } from '$lib/types/timeline';
+	import { timelineMillis, timelineTimestamp, formatTimelineDate } from '$lib/utils/timelineDate';
+	import ChoicePicker from '../inputs/ChoicePicker.svelte';
+	import AsyncStatus from '../AsyncStatus.svelte';
 	import { getAppServices } from '$lib/app/context';
 	import type { TemplateField } from '../../templates';
-	import AddTimelineEventModal from '../browser/AddTimelineEventModal.svelte';
-	import { Plus } from '@lucide/svelte';
+	import TimelineEventEditor from '../browser/TimelineEventEditor.svelte';
+	import { Plus, CalendarDays, Flag, Banknote, Presentation } from '@lucide/svelte';
+	const typeIcons = { event: CalendarDays, deadline: Flag, grant: Banknote, conference: Presentation };
+	import { getTimelineTemplate } from '$lib/types/timeline';
 
 	const { createTimelineService } = getAppServices();
 	let {
 		field,
-		value = $bindable(),
+		value = $bindable(''),
 		readonly = false,
 		mode = 'display',
 		countdownOnly = false
 	} = $props<{
 		field: TemplateField;
-		value: any;
+		value: string;
 		readonly?: boolean;
 		mode?: 'display' | 'edit';
 		countdownOnly?: boolean;
 	}>();
 
-	// Services for synced data
-	const timelineService = createTimelineService();
-
-	// State for timeline data
-	let allEvents = $state<any[]>([]);
-	let eventsMap = $state<Map<string, any>>(new Map());
-	let showAddModal = $state(false);
-
-	// Helper function to create a proper Date object from timestamp
-	function createEventDateTime(event: any): Date {
-		if (event.timestamp) {
-			return new Date(event.timestamp);
-		}
-		// Fallback for old events that might still have separate date/time fields
-		if (event.date) {
-			const dateOnly = new Date(event.date);
-			if (event.time) {
-				const [hours, minutes] = event.time.split(':').map(Number);
-				dateOnly.setHours(hours, minutes, 0, 0);
-			} else {
-				dateOnly.setHours(23, 59, 59, 999);
-			}
-			return dateOnly;
-		}
-		return new Date();
-	}
-
-	// Helper function to format event datetime for display
-	function formatEventDateTime(event: any): string {
-		if (!event.timestamp && !event.date) return 'No date';
-
-		// Extract timezone from timestamp if available
-		if (event.timestamp && event.timestamp.includes('T')) {
-			const timezoneMatch = event.timestamp.match(/([+-]\d{1,2}):\d{2}$/);
-			const offset = timezoneMatch?.[1];
-			const timezone =
-				offset === '-5'
-					? 'EST'
-					: offset === '-4'
-						? 'EDT'
-						: offset === '-12'
-							? 'AOE'
-							: offset === '+0'
-								? 'UTC'
-								: `UTC${offset}`;
-
-			// Parse the timestamp and format it directly to preserve the original timezone time
-			const datePart = event.timestamp.split('T')[0];
-			const timePart = event.timestamp.split('T')[1];
-			const timeOnly = timePart.split(/[+-]/)[0];
-			const timeComponents = timeOnly.split(':');
-			const timeStr = `${timeComponents[0]}:${timeComponents[1]}`;
-
-			// Parse the date components manually to avoid timezone conversion issues
-			const [year, month, day] = datePart.split('-').map(Number);
-			const dateStr = new Date(year, month - 1, day).toLocaleDateString('en-US', {
-				month: 'short',
-				day: 'numeric'
-			});
-
-			return `${dateStr}, ${timeStr} (${timezone})`;
-		}
-
-		// Fallback for legacy events
-		const eventDateTime = createEventDateTime(event);
-		const dateStr = eventDateTime.toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric'
+	const feature = createTimelineState(createTimelineService());
+	const resource = feature.list;
+	const command = feature.command;
+	const allEvents = $derived($resource.data);
+	const eventsMap = $derived(new Map(allEvents.map((event) => [event.id, event])));
+	let showEventEditor = $state(false);
+	let futureOnly = $state(true);
+	let now = $state(Date.now());
+	const choices = $derived(
+		allEvents
+			.filter((event) => event.id === value || !futureOnly || timelineMillis(event) >= now)
+			.sort((a, b) => timelineMillis(a) - timelineMillis(b))
+			.map((event) => ({
+				value: event.id,
+				label: event.title,
+				detail: formatTimelineDate(timelineTimestamp(event))
+			}))
+	);
+	$effect(() => {
+		const selectedId = value;
+		untrack(() => {
+			if ($resource.status === 'idle' || (selectedId && !eventsMap.has(selectedId)))
+				void feature.load();
 		});
-		const timeStr = eventDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-		return `${dateStr} at ${timeStr}`;
+	});
+	onDestroy(() => feature.dispose());
+	function createEventDateTime(event: TimelineEvent) {
+		return new Date(timelineMillis(event));
+	}
+	function formatEventDateTime(event: TimelineEvent) {
+		return formatTimelineDate(timelineTimestamp(event));
 	}
 
 	// Countdown calculation function
-	function calculateCountdown(event: any): {
+	function calculateCountdown(event: TimelineEvent): {
 		days: number;
 		hours: number;
 		minutes: number;
@@ -124,6 +90,7 @@
 		// Start interval when component mounts
 		countdownInterval = setInterval(() => {
 			countdownRefreshKey++;
+			now = Date.now();
 		}, 30000); // Update every 30 seconds
 
 		// Cleanup interval on unmount
@@ -134,53 +101,24 @@
 		};
 	});
 
-	// Load timeline data reactively
-	$effect(() => {
-		loadEvents();
-	});
-
-	async function loadEvents() {
-		if (timelineService.getEventsSortedByDate) {
-			const result = timelineService.getEventsSortedByDate();
-			const events = await result;
-			allEvents = events;
-
-			// Create a map for quick lookup
-			const map = new Map();
-			events.forEach((event) => map.set(event.id, event));
-			eventsMap = map;
+	async function handleAddEvent(templateType: string, eventData: Record<string, unknown>) {
+		const result = await feature.add(templateType, eventData);
+		if (result.ok) {
+			value = result.value.id;
+			showEventEditor = false;
 		}
 	}
 
-	async function handleAddEvent(templateType: string, eventData: Record<string, any>) {
-		const result = timelineService.addEvent(templateType, eventData);
-		await result;
-		await loadEvents(); // Reload events to get the new one
-		showAddModal = false;
-
-		// If this was successful, find the newly created event and select it
-		const updatedResult = timelineService.getEventsSortedByDate();
-		const updatedEvents = await updatedResult;
-		const newEvent = updatedEvents.find(
-			(e) =>
-				e.title === eventData.title &&
-				(e.timestamp === eventData.timestamp || (e as any).date === eventData.date)
-		);
-		if (newEvent) {
-			value = newEvent.id;
-		}
-	}
-
-	function handleCloseModal() {
-		showAddModal = false;
+	function closeEditor() {
+		showEventEditor = false;
 	}
 </script>
 
 <div class="field-container">
 	{#if !(countdownOnly && mode === 'display')}
-		<label for="timeline-select-{field.id}" class="mb-1 block text-sm font-medium text-zinc-600">
+		<span class="mb-1 block text-sm font-medium text-zinc-600">
 			{field.label}
-		</label>
+		</span>
 	{/if}
 
 	{#if mode === 'display'}
@@ -194,7 +132,7 @@
 						return calculateCountdown(event);
 					})()}
 					<div class="py-2 text-center">
-						<div class="font-sanss mb-3 text-lg font-semibold text-black">{event.title}</div>
+						<div class="mb-3 font-sans text-lg font-semibold text-black">{event.title}</div>
 						{#if countdown.isOverdue}
 							<div class=" text-2xl font-bold text-indigo-600">🏁 ENDED!</div>
 						{:else if countdown.days < 1}
@@ -270,32 +208,42 @@
 			<div class="py-1 text-zinc-600">No event selected</div>
 		{/if}
 	{:else}
-		<div class="flex gap-2">
-			<select
-				id="timeline-select-{field.id}"
+		<AsyncStatus state={$resource} onRetry={() => void feature.load()} />
+		<div class="space-y-2">
+			<ChoicePicker
+				label={field.label || 'Timeline event'}
+				placeholder="Choose an event…"
 				bind:value
-				class="min-w-0 flex-1 rounded border border-zinc-700 bg-white px-3 py-2 text-black focus:border-borg-blue focus:outline-none"
+				options={[{ value: '', label: 'No event' }, ...choices]}
+				disabled={readonly}
 			>
-				<option value="">Select timeline event...</option>
-				{#each allEvents as event}
-					<option value={event.id}>
-						{event.title} ({formatEventDateTime(event)}) - {event.templateType || 'Event'}
-					</option>
-				{/each}
-			</select>
+				{#snippet leading(id: string)}
+					{@const event = eventsMap.get(id)}
+					{#if event}
+						{@const Icon = typeIcons[event.templateType as keyof typeof typeIcons] || CalendarDays}
+						<Icon class="h-4 w-4 shrink-0" style="color: {getTimelineTemplate(event.templateType).color}" />
+					{/if}
+				{/snippet}
+				<label
+					class="flex items-center gap-2 border-b border-zinc-200 px-2 pb-3 text-xs text-zinc-600"
+				>
+					<input type="checkbox" role="switch" bind:checked={futureOnly} />Future only
+				</label>
+			</ChoicePicker>
 			<button
 				type="button"
-				onclick={() => (showAddModal = true)}
-				class="flex flex-shrink-0 items-center gap-1 rounded border border-borg-blue bg-borg-blue px-2 py-2 text-white transition-colors hover:bg-blue-600"
-				title="Add New Event"
+				disabled={readonly}
+				onclick={() => (showEventEditor = !showEventEditor)}
+				aria-expanded={showEventEditor}
+				class="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-900"
+				><Plus class="h-3.5 w-3.5" />New event</button
 			>
-				<Plus class="h-4 w-4" />
-				<span class="hidden text-sm lg:inline">New</span>
-			</button>
 		</div>
 	{/if}
 </div>
 
-{#if showAddModal}
-	<AddTimelineEventModal onAdd={handleAddEvent} onClose={handleCloseModal} />
+{#if showEventEditor}
+	<div class="mt-3">
+		<TimelineEventEditor error={$command.error} onAdd={handleAddEvent} onClose={closeEditor} />
+	</div>
 {/if}

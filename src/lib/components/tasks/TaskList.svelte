@@ -4,7 +4,7 @@
 	import { createTaskCommands } from '$lib/features/tasks/createTaskCommands';
 	import { getAppServices } from '$lib/app/context';
 	import type { Task } from '$lib/types/task';
-	import TaskModal from './TaskModal.svelte';
+	import TaskEditor from './TaskEditor.svelte';
 	import TaskRow from './TaskRow.svelte';
 	import TaskComposer from './TaskComposer.svelte';
 
@@ -133,11 +133,11 @@
 </div>
 
 {#if editingTask}
-	<TaskModal
-		task={editingTask}
-		{nodeId}
-		{projectSlug}
-		onClose={() => (editingTask = null)}
-		onTaskUpdated={() => void onTasksUpdated?.()}
-	/>
+	{#key editingTask.id}<TaskEditor
+			task={editingTask}
+			{nodeId}
+			{projectSlug}
+			onClose={() => (editingTask = null)}
+			onTaskUpdated={() => void onTasksUpdated?.()}
+		/>{/key}
 {/if}

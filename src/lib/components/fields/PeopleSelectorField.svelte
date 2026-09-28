@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { createPeopleDirectory } from '$lib/features/people/createPeopleDirectory';
+	import ChoicePicker from '../inputs/ChoicePicker.svelte';
+	import AsyncStatus from '../AsyncStatus.svelte';
 	import { getAppServices } from '$lib/app/context';
 	import type { TemplateField } from '../../templates';
 
@@ -15,24 +19,12 @@
 		mode?: 'display' | 'edit';
 	}>();
 
-	// State for people data
-	let allPeople = $state<any[]>([]);
-	let peopleMap = $state<Map<string, any>>(new Map());
-
-	// Load people data reactively
-	$effect(() => {
-		(async () => {
-			const result = peopleService.getAllPeople();
-			const people = await result;
-			allPeople = people;
-
-			// Create a map for quick lookup
-			const map = new Map();
-			people.forEach((person) => map.set(person.id, person));
-			peopleMap = map;
-		})();
-	});
-
+	const directory = createPeopleDirectory(peopleService);
+	const resource = directory.list;
+	const allPeople = $derived($resource.data);
+	const peopleMap = $derived(new Map(allPeople.map((person) => [person.id, person])));
+	onMount(() => void directory.load());
+	onDestroy(() => directory.dispose());
 	// Helper function to get initials from name
 	function getInitials(name: string): string {
 		return name
@@ -52,6 +44,7 @@
 	{/if}
 
 	<div class="space-y-2">
+		<AsyncStatus state={$resource} onRetry={() => void directory.load()} />
 		<div class="flex flex-wrap items-center gap-1.5">
 			{#if value && Array.isArray(value) && value.length > 0}
 				{#each value as personId}
@@ -77,12 +70,13 @@
 									</div>
 								{/if}
 							</div>
-							{#if mode === 'edit'}
+							{#if mode === 'edit' && !readonly}
 								<button
+									type="button"
 									onclick={() => {
 										value = value.filter((id: string) => id !== personId);
 									}}
-									class="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
+									class="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600 focus:opacity-100"
 									aria-label="Remove {person.name}"
 								>
 									×
@@ -96,23 +90,20 @@
 			{#if mode === 'edit'}
 				{@const availablePeople = allPeople.filter((p) => !value?.includes(p.id))}
 				{#if availablePeople.length > 0}
-					<select
-						value=""
-						onchange={(e) => {
-							const target = e.target as HTMLSelectElement;
-							const selectedId = target.value;
-							if (selectedId) {
-								value = value ? [...value, selectedId] : [selectedId];
-								target.value = '';
-							}
+					<ChoicePicker
+						label="Add person"
+						resetAfterSelect
+						placeholder="Add person…"
+						disabled={readonly}
+						options={availablePeople.map((person) => ({
+							value: person.id,
+							label: person.name || person.email || 'Unnamed person',
+							detail: person.email
+						}))}
+						onchange={(id) => {
+							if (!value?.includes(id)) value = [...(value || []), id];
 						}}
-						class="rounded border border-zinc-700 bg-white px-2 py-1 text-xs text-black focus:border-borg-blue focus:outline-none"
-					>
-						<option value="">Add person...</option>
-						{#each availablePeople as person}
-							<option value={person.id}>{person.name}</option>
-						{/each}
-					</select>
+					/>
 				{/if}
 			{/if}
 		</div>

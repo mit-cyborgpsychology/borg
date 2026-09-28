@@ -57,6 +57,14 @@ When using Firebase emulators, the fake Google Sign-In dialog will let you creat
 
 ### References library
 
+Use **Add paper** to paste a paper or PDF URL. Approved accounts can submit links,
+follow processing status, and retry failures. Submissions use the existing Borg
+fetch/classify/summarize pipeline, save to Grist and Chroma, and trigger map updates.
+Web submissions do not send WhatsApp replies. Configure private
+`RESEARCH_INGEST_URL` and `RESEARCH_INGEST_TOKEN`; see
+[ingestion setup](deploy/paper-submit/README.md). The queue survives ingestion
+restarts. Closing the dialog does not cancel an accepted submission.
+
 The References tab displays a central UMAP map with a paper sidebar. Dots are colored
 by embedding-based K-means topics, with cached LLM labels. Click a topic label
 or choose a topic in the sidebar to filter papers without moving the dots. The map uses

@@ -3,11 +3,13 @@
 	import { createTaskFormState } from '../../features/tasks/createTaskFormState';
 	import AsyncStatus from '../AsyncStatus.svelte';
 	import { getAppServices } from '$lib/app/context';
+	import ChoicePicker from '../inputs/ChoicePicker.svelte';
 	import { X } from '@lucide/svelte';
 	import type { Task } from '../../types/task';
 
 	const { authStore, peopleService, taskService } = getAppServices();
-	let dialog: HTMLDialogElement;
+	let editor: HTMLElement;
+	const inputId = $props.id();
 	interface Props {
 		nodeId: string;
 		projectSlug?: string;
@@ -23,15 +25,23 @@
 	const command = feature.command;
 	let people = $derived($peopleResource.data);
 	onMount(() => {
-		dialog.showModal();
-		dialog.querySelector('input')?.focus();
+		const previous = document.activeElement;
+		editor.querySelector('input')?.focus();
 		void feature.loadPeople();
+		return () => {
+			if (
+				previous instanceof HTMLElement &&
+				previous.isConnected &&
+				(document.activeElement === document.body || editor.contains(document.activeElement))
+			)
+				previous.focus({ preventScroll: true });
+		};
 	});
 	onDestroy(() => feature.dispose());
 
 	// Determine if this is edit mode
 	const isEditMode = $derived(!!task);
-	const modalTitle = $derived(isEditMode ? 'Edit Task' : 'Add Task');
+	const editorTitle = $derived(isEditMode ? 'Edit Task' : 'Add Task');
 	const submitButtonText = $derived(isEditMode ? 'Save Changes' : 'Add Task');
 
 	// Initialize form values
@@ -44,7 +54,7 @@
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 
-		if (!title.trim()) return;
+		if (isLoading || !title.trim()) return;
 
 		const result = await feature.save(
 			nodeId,
@@ -65,16 +75,23 @@
 	}
 </script>
 
-<dialog
-	bind:this={dialog}
-	oncancel={onClose}
-	aria-label={modalTitle}
-	class="nodrag nopan fixed m-auto w-full max-w-md rounded-lg border border-zinc-200 bg-borg-beige p-6 backdrop:bg-black/30"
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<section
+	onkeydown={(event) => {
+		if (event.key === 'Escape' && !isLoading) {
+			event.stopPropagation();
+			onClose();
+		}
+	}}
+	bind:this={editor}
+	aria-label={editorTitle}
+	class="nodrag nopan rounded-lg border border-zinc-200 bg-white p-4"
 >
 	<div class="mb-4 flex items-center justify-between">
-		<h2 class="text-lg font-semibold text-black">{modalTitle}</h2>
+		<h2 class="text-lg font-semibold text-black">{editorTitle}</h2>
 		<button
 			onclick={onClose}
+			disabled={isLoading}
 			aria-label="Close task"
 			class="rounded-lg p-1 text-zinc-400 hover:bg-white hover:text-zinc-600"
 		>
@@ -86,9 +103,11 @@
 	<AsyncStatus state={$command} pendingLabel="Saving…" />
 	<form onsubmit={handleSubmit} class="space-y-4">
 		<div>
-			<label for="title" class="mb-1 block text-sm font-medium text-zinc-600"> Task </label>
+			<label for={`${inputId}-title`} class="mb-1 block text-sm font-medium text-zinc-600">
+				Task
+			</label>
 			<input
-				id="title"
+				id={`${inputId}-title`}
 				type="text"
 				bind:value={title}
 				placeholder="What needs to be done?"
@@ -99,24 +118,28 @@
 		</div>
 
 		<div>
-			<label for="assignee" class="mb-1 block text-sm font-medium text-zinc-600"> Assign to </label>
-			<select
-				id="assignee"
+			<span class="mb-1 block text-sm font-medium text-zinc-600">Assign to</span>
+			<ChoicePicker
+				label="Assign to"
 				bind:value={assignee}
-				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black focus:ring-2 focus:ring-borg-blue focus:outline-none"
 				disabled={isLoading}
-			>
-				<option value="">Unassigned</option>
-				{#each people as person}
-					<option value={person.id}>{person.name}</option>
-				{/each}
-			</select>
+				options={[
+					{ value: '', label: 'Unassigned' },
+					...people.map((person) => ({
+						value: person.id,
+						label: person.name,
+						detail: person.email
+					}))
+				]}
+			/>
 		</div>
 
 		<div>
-			<label for="dueDate" class="mb-1 block text-sm font-medium text-zinc-600"> Due Date </label>
+			<label for={`${inputId}-dueDate`} class="mb-1 block text-sm font-medium text-zinc-600">
+				Due Date
+			</label>
 			<input
-				id="dueDate"
+				id={`${inputId}-dueDate`}
 				type="date"
 				bind:value={dueDate}
 				class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-black focus:ring-2 focus:ring-borg-blue focus:outline-none"
@@ -125,9 +148,11 @@
 		</div>
 
 		<div>
-			<label for="notes" class="mb-1 block text-sm font-medium text-zinc-600"> Notes </label>
+			<label for={`${inputId}-notes`} class="mb-1 block text-sm font-medium text-zinc-600">
+				Notes
+			</label>
 			<textarea
-				id="notes"
+				id={`${inputId}-notes`}
 				bind:value={notes}
 				rows="3"
 				placeholder="Additional notes..."
@@ -161,4 +186,4 @@
 			</button>
 		</div>
 	</form>
-</dialog>
+</section>

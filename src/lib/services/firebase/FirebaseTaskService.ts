@@ -1,6 +1,6 @@
 import {
 	collection,
-	addDoc,
+	setDoc,
 	deleteDoc,
 	getDocs,
 	getDoc,
@@ -93,7 +93,9 @@ export class FirebaseTaskService implements ITaskService {
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) =>
+			this.toTaskWithContext({ ...doc.data(), id: doc.id } as StoredTask)
+		);
 	}
 
 	async getProjectTasks(projectSlug: string): Promise<TaskWithContext[]> {
@@ -104,7 +106,9 @@ export class FirebaseTaskService implements ITaskService {
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) =>
+			this.toTaskWithContext({ ...doc.data(), id: doc.id } as StoredTask)
+		);
 	}
 
 	async getPersonTasks(personId: string): Promise<TaskWithContext[]> {
@@ -115,7 +119,9 @@ export class FirebaseTaskService implements ITaskService {
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) =>
+			this.toTaskWithContext({ ...doc.data(), id: doc.id } as StoredTask)
+		);
 	}
 
 	async getNodeTasks(nodeId: string, projectSlug?: string): Promise<Task[]> {
@@ -141,7 +147,7 @@ export class FirebaseTaskService implements ITaskService {
 		return snapshot.docs.map((doc) => {
 			const data = doc.data() as StoredTask;
 			return {
-				id: data.id,
+				id: doc.id,
 				title: data.title,
 				assignee: data.assignee,
 				dueDate: data.dueDate,
@@ -207,8 +213,8 @@ export class FirebaseTaskService implements ITaskService {
 				createdBy: this.readSession().user?.uid || 'anonymous'
 			};
 
-			const docRef = await addDoc(collection(this.db, 'tasks'), storedTask);
-			await updateDoc(docRef, { id: docRef.id });
+			const docRef = doc(collection(this.db, 'tasks'));
+			await setDoc(docRef, { ...storedTask, id: docRef.id });
 			return;
 		}
 
@@ -267,9 +273,9 @@ export class FirebaseTaskService implements ITaskService {
 			createdBy: this.readSession().user?.uid || 'anonymous'
 		};
 
-		const docRef = await addDoc(collection(this.db, 'tasks'), storedTask);
-		// Update the document with its own ID
-		await updateDoc(docRef, { id: docRef.id });
+		// Publish a complete task in one write so live views can act on it immediately.
+		const docRef = doc(collection(this.db, 'tasks'));
+		await setDoc(docRef, { ...storedTask, id: docRef.id });
 	}
 
 	async updateTask(
@@ -363,7 +369,9 @@ export class FirebaseTaskService implements ITaskService {
 			orderBy('createdAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) =>
+			this.toTaskWithContext({ ...doc.data(), id: doc.id } as StoredTask)
+		);
 	}
 
 	async getPersonResolvedTasksLog(
@@ -381,7 +389,9 @@ export class FirebaseTaskService implements ITaskService {
 			orderBy('updatedAt', 'desc')
 		);
 		const snapshot = await getDocs(q);
-		return snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
+		return snapshot.docs.map((doc) =>
+			this.toTaskWithContext({ ...doc.data(), id: doc.id } as StoredTask)
+		);
 	}
 
 	// Cache for task counts to avoid repeated expensive queries
@@ -445,7 +455,7 @@ export class FirebaseTaskService implements ITaskService {
 			const tasks = snapshot.docs.map((doc) => {
 				const data = doc.data() as StoredTask;
 				return {
-					id: data.id,
+					id: doc.id,
 					title: data.title,
 					assignee: data.assignee,
 					dueDate: data.dueDate,
@@ -480,7 +490,9 @@ export class FirebaseTaskService implements ITaskService {
 		}
 
 		return onSnapshot(q, (snapshot) => {
-			const tasks = snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
+			const tasks = snapshot.docs.map((doc) =>
+				this.toTaskWithContext({ ...doc.data(), id: doc.id } as StoredTask)
+			);
 			callback(tasks);
 		});
 	}
@@ -499,7 +511,9 @@ export class FirebaseTaskService implements ITaskService {
 		return onSnapshot(
 			q,
 			(snapshot) => {
-				const tasks = snapshot.docs.map((doc) => this.toTaskWithContext(doc.data() as StoredTask));
+				const tasks = snapshot.docs.map((doc) =>
+					this.toTaskWithContext({ ...doc.data(), id: doc.id } as StoredTask)
+				);
 				callback(tasks);
 			},
 			onError

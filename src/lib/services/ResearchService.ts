@@ -1,6 +1,6 @@
 import type { IResearchService } from './interfaces/IResearchService';
 import type { ReadSession } from './interfaces/Session';
-import type { ResearchPaper, ResearchMap } from '../types/research';
+import type { ResearchPaper, ResearchMap, PaperSubmission } from '../types/research';
 
 export class ResearchService implements IResearchService {
 	private readSession: ReadSession;
@@ -33,6 +33,39 @@ export class ResearchService implements IResearchService {
 		});
 		if (!response.ok)
 			throw new Error('The research map is unavailable. You can still browse the papers.');
+		return response.json();
+	}
+	async submitPaper(url: string): Promise<PaperSubmission> {
+		return this.submissionRequest('/api/research/submissions', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ url })
+		});
+	}
+	async getSubmission(id: string): Promise<PaperSubmission> {
+		return this.submissionRequest(`/api/research/submissions/${encodeURIComponent(id)}`);
+	}
+	private async submissionRequest(
+		url: string,
+		options: RequestInit = {}
+	): Promise<PaperSubmission> {
+		const user = this.readSession().user;
+		if (!user) throw new Error('Sign in to add papers.');
+		const response = await fetch(url, {
+			...options,
+			headers: { ...options.headers, Authorization: `Bearer ${await user.getIdToken()}` },
+			signal: AbortSignal.timeout(20_000)
+		});
+		if (!response.ok) {
+			if (response.status === 401) throw new Error('Your session expired. Please sign in again.');
+			if (response.status === 403) throw new Error('Your account needs approval to add papers.');
+			const body = await response.json().catch(() => null);
+			throw new Error(
+				typeof body?.message === 'string'
+					? body.message
+					: 'Unable to submit paper. Please try again.'
+			);
+		}
 		return response.json();
 	}
 }

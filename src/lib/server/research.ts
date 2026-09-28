@@ -56,7 +56,8 @@ export async function listResearch(
 		{
 			headers: { Authorization: `Bearer ${config.apiKey}` },
 			signal: AbortSignal.timeout(20_000),
-			redirect: 'error'
+			// Workers requires manual mode; the status check below rejects redirects.
+			redirect: 'manual'
 		}
 	);
 	// Never pass Grist response bodies or credentials through to the browser.

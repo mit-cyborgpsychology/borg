@@ -15,6 +15,7 @@ const page = await browser.newPage({
 	timezoneId: 'America/New_York'
 });
 page.setDefaultTimeout(15000);
+page.setDefaultNavigationTimeout(60000);
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 await page.route('**/*', (route) =>
@@ -140,7 +141,7 @@ try {
 	await sidebar.getByRole('textbox', { name: 'New task', exact: true }).fill('Sidebar task');
 	await sidebar.getByRole('textbox', { name: 'New task', exact: true }).press('Enter');
 	await node.getByRole('button', { name: 'Edit Sidebar task', exact: true }).waitFor();
-	await sidebar.getByRole('button', { name: 'Close tasks' }).click();
+	await sidebar.getByRole('button', { name: 'All tasks' }).click();
 	// Completion is persisted and undo restores the same task.
 	await node.getByRole('checkbox', { name: 'Mark Sidebar task as done', exact: true }).click();
 	await node.getByRole('button', { name: 'Undo', exact: true }).waitFor();
@@ -164,12 +165,17 @@ try {
 	);
 	// Task editing lives outside the transformed canvas and supports Escape.
 	await node.getByRole('button', { name: 'Edit Share results', exact: true }).click();
-	const modal = page.getByRole('dialog', { name: 'Edit Task', exact: true });
+	const modal = page.getByRole('region', { name: 'Edit Task', exact: true });
 	await modal.getByLabel('Task', { exact: true }).fill('Share updated results');
 	await modal.getByLabel('Notes', { exact: true }).fill('Bring these to the meeting');
+	await modal.getByRole('button', { name: 'Assign to', exact: true }).click();
+	await modal.getByRole('textbox', { name: 'Search assign to' }).fill('Unassigned');
+	await modal.getByRole('textbox', { name: 'Search assign to' }).press('ArrowDown');
+	await page.keyboard.press('Enter');
+	await page.screenshot({ path: '/tmp/borg-task-editor.png' });
 	await modal.getByRole('button', { name: 'Save Changes', exact: true }).click();
 	await modal.waitFor({ state: 'hidden' });
-	await waitForSaved('Share updated results');
+	assert.equal((await waitForSaved('Share updated results')).assignee.stringValue, '');
 	await node.getByRole('button', { name: 'Edit Share updated results', exact: true }).click();
 	await page.keyboard.press('Escape');
 	await modal.waitFor({ state: 'hidden' });

@@ -33,3 +33,12 @@ export interface ResearchMap {
 	points: ResearchMapPoint[];
 	topics: ResearchTopic[];
 }
+
+export interface PaperSubmission {
+	id: string;
+	url: string;
+	status: 'queued' | 'processing' | 'saved' | 'already_saved' | 'not_paper' | 'failed';
+	message: string;
+	title: string;
+	updatedAt: string;
+}

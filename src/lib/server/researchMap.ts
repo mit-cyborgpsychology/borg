@@ -8,7 +8,8 @@ export async function fetchResearchMap(
 	const response = await request(url, {
 		headers: { Authorization: `Bearer ${token}` },
 		signal: AbortSignal.timeout(25_000),
-		redirect: 'error'
+		// Workers requires manual mode; the status check below rejects redirects.
+		redirect: 'manual'
 	});
 	if (!response.ok) throw new Error('Research map source unavailable');
 	const data = await response.json();

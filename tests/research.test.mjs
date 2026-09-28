@@ -16,7 +16,7 @@ test('Grist records expose only research fields, safe links, and ISO saved dates
 	const papers = await listResearch(config, async (url, options) => {
 		assert.equal(url, 'https://grist.test/api/docs/research/tables/Table1/records');
 		assert.equal(options.headers.Authorization, 'Bearer test-secret');
-		assert.equal(options.redirect, 'error');
+		assert.equal(options.redirect, 'manual');
 		return Response.json({
 			records: [
 				{

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
-	import { Search, RefreshCw, ArrowUpRight, FileText, X, Network } from '@lucide/svelte';
+	import { Search, RefreshCw, ArrowUpRight, FileText, X, Network, Plus } from '@lucide/svelte';
 	import { SvelteFlowProvider } from '@xyflow/svelte';
 	import { getAppServices } from '$lib/app/context';
 	import { createResearchState } from '$lib/features/research/createResearchState';
@@ -10,6 +10,8 @@
 		type ResearchSort
 	} from '$lib/features/research/filterResearch';
 	import ResearchMap from '../research/ResearchMap.svelte';
+	import AddPaperDialog from '../research/AddPaperDialog.svelte';
+	let addDialog: { open: () => void };
 
 	const { researchService } = getAppServices();
 	const feature = createResearchState(researchService);
@@ -87,15 +89,23 @@
 					>{papers.length} papers</span
 				>{/if}
 		</div>
-		<button
-			type="button"
-			aria-label="Refresh references"
-			onclick={() => void feature.load()}
-			disabled={loading || mapLoading}
-			class="flex items-center gap-1.5 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 disabled:opacity-50"
-		>
-			<RefreshCw class="h-3 w-3 {loading || mapLoading ? 'animate-spin' : ''}" />Refresh
-		</button>
+		<div class="flex items-center gap-2">
+			<button
+				type="button"
+				onclick={() => addDialog.open()}
+				class="flex items-center gap-1.5 rounded bg-zinc-800 px-2 py-1 text-xs text-white hover:bg-zinc-700"
+				><Plus class="h-3 w-3" />Add paper</button
+			>
+			<button
+				type="button"
+				aria-label="Refresh references"
+				onclick={() => void feature.load()}
+				disabled={loading || mapLoading}
+				class="flex items-center gap-1.5 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 disabled:opacity-50"
+			>
+				<RefreshCw class="h-3 w-3 {loading || mapLoading ? 'animate-spin' : ''}" />Refresh
+			</button>
+		</div>
 	</header>
 	<div class="flex min-h-0 flex-1 flex-col md:flex-row">
 		<main
@@ -329,3 +339,5 @@
 		</aside>
 	</div>
 </section>
+
+<AddPaperDialog bind:this={addDialog} {feature} />

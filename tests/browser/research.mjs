@@ -60,6 +60,23 @@ try {
 		).status(),
 		403
 	);
+	assert.equal(
+		(
+			await page.request.post(`${baseURL}/api/research/submissions`, {
+				data: { url: 'https://example.com/paper' }
+			})
+		).status(),
+		401
+	);
+	assert.equal(
+		(
+			await page.request.post(`${baseURL}/api/research/submissions`, {
+				headers: { Authorization: `Bearer ${pending.idToken}` },
+				data: { url: 'https://example.com/paper' }
+			})
+		).status(),
+		403
+	);
 	await page.goto(baseURL);
 	await page.getByRole('button', { name: /Google/ }).waitFor();
 	const email = `admin-research-${Date.now()}@example.test`;
@@ -88,6 +105,68 @@ try {
 	assert.equal(await list.locator(':scope > li').count(), papers.length);
 	assert.ok(papers.every((p) => !('fields' in p) && !('apiKey' in p)));
 
+	// Exercise live duplicate handling without adding arbitrary papers to the real library.
+	await library.getByRole('button', { name: 'Add paper', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Add paper' });
+	const paperUrl = dialog.getByRole('textbox', { name: 'Paper URL' });
+	await paperUrl.fill(papers[0].url);
+	await dialog.getByRole('button', { name: 'Add paper', exact: true }).click();
+	await dialog
+		.getByText('This paper is already in References.', { exact: false })
+		.waitFor({ timeout: 30000 });
+	assert.equal(await list.locator(':scope > li').count(), papers.length);
+	// Failed submissions keep the URL and allow a retry.
+	const submissionFailure = (route) =>
+		route.fulfill({
+			status: 502,
+			contentType: 'application/json',
+			body: '{"message":"Unable to submit paper. Please try again."}'
+		});
+	await page.route('**/api/research/submissions', submissionFailure);
+	await paperUrl.fill('https://example.com/new-paper');
+	await dialog.getByRole('button', { name: 'Add paper', exact: true }).click();
+	await dialog.getByRole('alert').waitFor();
+	assert.equal(await paperUrl.inputValue(), 'https://example.com/new-paper');
+	await page.unroute('**/api/research/submissions', submissionFailure);
+	const mockId = 'f'.repeat(64);
+	const job = {
+		id: mockId,
+		url: 'https://example.com/new-paper',
+		status: 'queued',
+		message: 'Paper queued…',
+		title: '',
+		updatedAt: new Date().toISOString()
+	};
+	const submitMock = (route) => {
+		assert.deepEqual(route.request().postDataJSON(), { url: job.url });
+		return route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			body: JSON.stringify(job)
+		});
+	};
+	const statusMock = (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				...job,
+				status: 'saved',
+				message: 'Paper saved. Its map point is being prepared.',
+				title: 'Test paper'
+			})
+		});
+	await page.route('**/api/research/submissions', submitMock);
+	await page.route(`**/api/research/submissions/${mockId}`, statusMock);
+	await dialog.getByRole('button', { name: 'Add paper', exact: true }).click();
+	await dialog.getByText('Paper queued…', { exact: false }).waitFor();
+	assert.equal(await dialog.getByRole('button', { name: 'Adding paper…' }).isDisabled(), true);
+	await dialog
+		.getByText('Paper saved. Its map point is being prepared.', { exact: false })
+		.waitFor();
+	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+	await page.unroute('**/api/research/submissions', submitMock);
+	await page.unroute(`**/api/research/submissions/${mockId}`, statusMock);
 	const savedMap = await (await mapLoaded).json();
 	const map = library.getByRole('region', { name: 'UMAP paper map' });
 	await map.waitFor();
@@ -250,8 +329,17 @@ try {
 	await page.unroute('**/api/research', empty);
 	assert.deepEqual(errors, []);
 	console.log(
-		`References browser checks passed: ${papers.length} live papers, topic labels/filtering, and Python UMAP coordinates, map/sidebar selection, stable filtering, auth/approval, search, source filter, sorting, refresh/retry, links, empty state, mobile layout.`
+		`References browser checks passed: ${papers.length} live papers, web submission/duplicate/retry, topic labels/filtering, and Python UMAP coordinates, map/sidebar selection, stable filtering, auth/approval, search, source filter, sorting, refresh/retry, links, empty state, mobile layout.`
 	);
+} catch (error) {
+	await page.screenshot({ path: '/tmp/borg-paper-submission-failure.png' });
+	console.error(
+		await page
+			.getByRole('dialog', { name: 'Add paper' })
+			.textContent()
+			.catch(() => '')
+	);
+	throw error;
 } finally {
 	await browser.close();
 }

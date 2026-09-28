@@ -6,7 +6,7 @@
 	import { getAppServices } from '$lib/app/context';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import CreateProjectModal from './CreateProjectModal.svelte';
+	import ProjectComposer from './ProjectComposer.svelte';
 	import ProjectsCanvas from './ProjectsCanvas.svelte';
 	import { FolderOpen, Trash2, Search, Network, Grid, Plus } from '@lucide/svelte';
 
@@ -21,7 +21,7 @@
 	}>();
 
 	let projects = $derived($resource.data.projects);
-	let showCreateModal = $state(false);
+	let showProjectComposer = $state(false);
 	let searchQuery = $state('');
 	let projectCounts = $derived($resource.data.counts);
 	let projectTaskCounts = $derived($resource.data.taskCounts);
@@ -50,7 +50,7 @@
 	async function handleCreateProject(projectData: Parameters<typeof featureState.create>[0]) {
 		creatingProject = true;
 		try {
-			if ((await featureState.create(projectData)).ok) showCreateModal = false;
+			if ((await featureState.create(projectData)).ok) showProjectComposer = false;
 		} finally {
 			creatingProject = false;
 		}
@@ -97,6 +97,15 @@
 <svelte:document on:visibilitychange={handleVisibilityChange} />
 
 <div class="flex h-full w-full flex-col overflow-hidden">
+	{#if showProjectComposer}
+		<ProjectComposer
+			error={$command.error}
+			onCreate={handleCreateProject}
+			onClose={() => (showProjectComposer = false)}
+			isLoading={creatingProject}
+		/>
+	{/if}
+
 	<!-- Content Area -->
 	<div class={viewMode === 'canvas' ? 'min-h-0 flex-1' : 'flex-1 overflow-y-auto p-4'}>
 		{#if viewMode === 'list'}
@@ -130,7 +139,7 @@
 					</div>
 					<div class="flex-1"></div>
 					<button
-						onclick={() => (showCreateModal = true)}
+						onclick={() => (showProjectComposer = true)}
 						class="flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-50"
 					>
 						<Plus class="h-3.5 w-3.5" />
@@ -211,19 +220,10 @@
 					projects={projects.filter((p) => p.id !== 'project-canvas')}
 					onProjectClick={handleOpenProject}
 					onProjectUpdate={() => loadProjects(true)}
-					onCreateProject={() => (showCreateModal = true)}
+					onCreateProject={() => (showProjectComposer = true)}
 					bind:viewMode
 				/>
 			</div>
 		{/if}
 	</div>
 </div>
-
-{#if showCreateModal}
-	<CreateProjectModal
-		error={$command.error}
-		onCreate={handleCreateProject}
-		onClose={() => (showCreateModal = false)}
-		isLoading={creatingProject}
-	/>
-{/if}

@@ -15,7 +15,7 @@ const map = {
 test('map proxy validates coordinates and only returns public fields', async () => {
 	const result = await fetchResearchMap('https://map.test', 'secret', async (url, options) => {
 		assert.equal(options.headers.Authorization, 'Bearer secret');
-		assert.equal(options.redirect, 'error');
+		assert.equal(options.redirect, 'manual');
 		return Response.json({
 			...map,
 			fingerprint: 'private',
@@ -165,4 +165,27 @@ test('topic proxy validates labels, colors and membership and hides internal fie
 		() => 'secret'
 	)({ headers: { authorization: 'Bearer secret' } }, res);
 	assert.ok(!res.body.includes('private'));
+});
+
+test('research upstream redirects are rejected without following credentialed requests', async () => {
+	for (const status of [301, 302, 303, 307, 308]) {
+		let calls = 0;
+		const request = async (_url, options) => {
+			calls++;
+			assert.equal(options.redirect, 'manual');
+			return new Response(null, { status, headers: { Location: 'https://other.test' } });
+		};
+		await assert.rejects(
+			listResearch(
+				{ apiUrl: 'https://grist.test', apiKey: 'secret', docId: 'doc', tableId: 'table' },
+				request
+			),
+			/HTTP/
+		);
+		await assert.rejects(
+			fetchResearchMap('https://map.test', 'secret', request),
+			/source unavailable/
+		);
+		assert.equal(calls, 2);
+	}
 });
