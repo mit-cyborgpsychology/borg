@@ -1,3 +1,5 @@
+import { canonicalNodeType } from './features/links/linkNode.ts';
+
 export interface NodeTemplate {
 	id: string;
 	name: string;
@@ -91,54 +93,6 @@ export const nodeTemplates: Record<string, NodeTemplate> = {
 		]
 	},
 
-	paper: {
-		id: 'paper',
-		name: 'Paper',
-		color: '#52525b',
-		fields: [
-			{
-				id: 'title',
-				label: 'Paper Title',
-				type: 'text',
-				placeholder: 'Enter paper title...',
-				required: true
-			},
-			{
-				id: 'status',
-				label: 'Status',
-				type: 'status',
-				options: ['Done']
-			},
-			{
-				id: 'publicationStatus',
-				label: 'Publication Status',
-				type: 'status',
-				options: ['Draft', 'Under Review', 'Accepted', 'Published']
-			}
-		]
-	},
-
-	code: {
-		id: 'code',
-		name: 'Code',
-		color: '#52525b',
-		fields: [
-			{
-				id: 'title',
-				label: 'Repository Name',
-				type: 'text',
-				placeholder: 'Enter repo name...',
-				required: true
-			},
-			{
-				id: 'status',
-				label: 'Status',
-				type: 'status',
-				options: ['Done']
-			}
-		]
-	},
-
 	time: {
 		id: 'time',
 		name: 'Time',
@@ -170,25 +124,23 @@ export const nodeTemplates: Record<string, NodeTemplate> = {
 		name: 'Link',
 		color: '#52525b',
 		fields: [
+			{ id: 'url', label: 'URL', type: 'link', placeholder: 'Paste a URL...', required: true },
+			{ id: 'title', label: 'Title', type: 'text', placeholder: 'Optional title...' },
 			{
-				id: 'title',
-				label: 'Link Name',
-				type: 'text',
-				placeholder: 'Enter link name...',
-				required: true
+				id: 'description',
+				label: 'Description',
+				type: 'textarea',
+				placeholder: 'Add a description...'
 			},
-			// {
-			// 	id: 'url',
-			// 	label: 'URL',
-			// 	type: 'link',
-			// 	placeholder: 'https://...'
-			// },
 			{
-				id: 'status',
-				label: 'Status',
-				type: 'status',
-				options: ['Done']
-			}
+				id: 'viewMode',
+				label: 'View as',
+				type: 'select',
+				options: ['Node', 'Iframe'],
+				defaultValue: 'Node',
+				showInDisplay: false
+			},
+			{ id: 'status', label: 'Status', type: 'status', options: ['Done'] }
 		]
 	},
 
@@ -289,35 +241,6 @@ export const nodeTemplates: Record<string, NodeTemplate> = {
 				label: 'Description',
 				type: 'textarea',
 				placeholder: 'Enter image description...',
-				required: false
-			}
-		]
-	},
-
-	iframe: {
-		id: 'iframe',
-		name: 'Iframe',
-		color: '#8b5cf6',
-		fields: [
-			{
-				id: 'title',
-				label: 'Iframe Title',
-				type: 'text',
-				placeholder: 'Enter iframe title...',
-				required: false
-			},
-			{
-				id: 'url',
-				label: 'URL',
-				type: 'text',
-				placeholder: 'Enter website URL...',
-				required: true
-			},
-			{
-				id: 'description',
-				label: 'Description',
-				type: 'textarea',
-				placeholder: 'Enter description...',
 				required: false
 			}
 		]
@@ -432,9 +355,11 @@ export const suggestedCustomFields: Record<string, TemplateField[]> = {
 };
 
 export function getSuggestedFields(templateId: string): TemplateField[] {
-	return suggestedCustomFields[templateId] || [];
+	return canonicalNodeType(templateId) === 'link'
+		? [...suggestedCustomFields.code, ...suggestedCustomFields.paper, ...suggestedCustomFields.link]
+		: suggestedCustomFields[templateId] || [];
 }
 
 export function getTemplate(templateId: string): NodeTemplate {
-	return nodeTemplates[templateId] || nodeTemplates.blank;
+	return nodeTemplates[canonicalNodeType(templateId)] || nodeTemplates.blank;
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { describeLink } from '$lib/features/links/linkNode';
 	import {
 		getTemplate,
 		getSuggestedFields,
@@ -9,7 +10,7 @@
 	import FieldRenderer from './fields/FieldRenderer.svelte';
 	import CustomFieldManager from './fields/CustomFieldManager.svelte';
 	import FieldVisibilityManager from './fields/FieldVisibilityManager.svelte';
-	import { Lock, Unlock } from '@lucide/svelte';
+	import { Lock, Unlock, Trash2, Plus } from '@lucide/svelte';
 
 	let {
 		nodeId,
@@ -60,7 +61,7 @@
 			...editableData,
 			customFields: customFields
 		};
-		await onSave(nodeId, { nodeData: dataToSave });
+		await onSave(nodeId, { nodeData: dataToSave, data: { templateType: template.id } });
 	}
 
 	function autoSave() {
@@ -112,160 +113,203 @@
 			return !existsInCustom && !existsInTemplate;
 		})
 	);
+	const appearanceIds = new Set([
+		'style',
+		'backgroundColor',
+		'textSize',
+		'size',
+		'width',
+		'height',
+		'rotation',
+		'viewMode'
+	]);
+	let fieldGroups = $derived(
+		[
+			{
+				title: 'Content',
+				fields: template.fields.filter(
+					(field) =>
+						!appearanceIds.has(field.id) &&
+						!['status', 'select', 'people-selector', 'tags'].includes(field.type)
+				)
+			},
+			{
+				title: 'Properties',
+				fields: template.fields.filter(
+					(field) =>
+						!appearanceIds.has(field.id) &&
+						['status', 'select', 'people-selector', 'tags'].includes(field.type)
+				)
+			},
+			{
+				title: 'Appearance',
+				fields: template.fields.filter((field) => appearanceIds.has(field.id))
+			}
+		].filter((group) => group.fields.length > 0)
+	);
 </script>
 
-{#if error}<p role="alert" class="px-4 py-2 text-sm text-red-700">{error}</p>{/if}
-
-<!-- Header -->
-<div class="border-b border-zinc-200 px-3 py-2">
-	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-2">
-			<span
-				class="rounded border bg-white px-2 py-0.5 text-xs font-medium"
-				style="border-color: {template.color};"
-			>
-				{template.name}
-			</span>
-			{#if isSaving}
-				<span class="animate-pulse text-xs text-zinc-500">Saving...</span>
-			{/if}
-		</div>
+<header class="shrink-0 border-b border-zinc-200 px-4 py-3">
+	<div class="mb-2 flex items-center justify-between gap-3">
+		<span class="flex items-center gap-2 font-mono text-xs font-medium text-zinc-500">
+			<span class="h-2 w-2 rounded-sm" style:background-color={template.color}></span>
+			{template.id === 'link' ? `Link · ${describeLink(editableData.url).label}` : template.name}
+		</span>
 		<button
 			onclick={() => {
 				editableData.locked = !editableData.locked;
 			}}
 			aria-label={editableData.locked ? 'Unlock node' : 'Lock node'}
-			class="rounded p-1 transition-colors {editableData.locked
-				? 'text-red-600 hover:bg-red-50'
-				: 'text-zinc-400 hover:bg-zinc-100'}"
+			aria-pressed={!!editableData.locked}
+			title={editableData.locked ? 'Unlock position' : 'Lock position'}
+			class="rounded p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-blue-500"
 		>
-			{#if editableData.locked}
-				<Lock class="h-4 w-4" />
-			{:else}
-				<Unlock class="h-4 w-4" />
-			{/if}
+			{#if editableData.locked}<Lock class="h-3.5 w-3.5" />{:else}<Unlock
+					class="h-3.5 w-3.5"
+				/>{/if}
 		</button>
 	</div>
-</div>
+	<div class="flex items-center justify-between gap-3">
+		<h2 class="min-w-0 truncate font-sans text-sm font-semibold text-zinc-900">
+			{editableData.title ||
+				editableData.name ||
+				(template.id === 'link' && describeLink(editableData.url).hostname) ||
+				template.name}
+		</h2>
+		{#if isSaving && !error}
+			<span role="status" class="shrink-0 font-mono text-[11px] text-zinc-400">Saving…</span>
+		{/if}
+	</div>
+</header>
 
-<!-- Content -->
-<div
-	class="flex-1 overflow-y-auto p-3 text-xs [&_input]:text-xs [&_label]:text-xs [&_select]:text-xs [&_textarea]:text-xs"
->
-	<div class="space-y-3">
-		{#each template.fields as field}
-			<div>
-				<FieldRenderer
-					{field}
-					bind:value={editableData[field.id]}
-					readonly={false}
-					mode="edit"
-					nodeData={editableData}
-				/>
-				{#if isProjectMetadata && (field.id === 'title' || field.id === 'status')}
-					<p class="mt-1 text-xs text-zinc-400">Syncs with project metadata</p>
+{#if error}<p role="alert" class="border-b border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
+		{error}
+	</p>{/if}
+
+<div class="inspector-fields min-h-0 flex-1 overflow-y-auto overscroll-contain text-xs">
+	{#each fieldGroups as group (group.title)}
+		<section class="border-b border-zinc-200 px-4 py-4" aria-label={group.title}>
+			<h3 class="mb-2 font-sans text-xs font-semibold text-zinc-900">{group.title}</h3>
+			<div class="space-y-2.5">
+				{#each group.fields as field (field.id)}
+					<FieldRenderer
+						{field}
+						bind:value={editableData[field.id]}
+						readonly={false}
+						mode="edit"
+						nodeData={editableData}
+					/>
+				{/each}
+				{#if template.id === 'link' && group.title === 'Content' && editableData.url && !describeLink(editableData.url).url}
+					<p role="status" class="text-xs text-amber-700">
+						Enter a valid http or https web address.
+					</p>
+				{/if}
+				{#if template.id === 'link' && group.title === 'Appearance' && editableData.viewMode === 'Iframe'}
+					<p class="text-[11px] leading-relaxed text-zinc-500">
+						Some websites block embedding. You can always open the link in a new tab.
+					</p>
 				{/if}
 			</div>
-		{/each}
+			{#if isProjectMetadata && group.title === 'Content'}
+				<p class="mt-3 text-[11px] leading-relaxed text-zinc-400">
+					Changes are shared with the project.
+				</p>
+			{/if}
+		</section>
+	{/each}
 
-		<!-- Lock toggle for all nodes -->
-		<div class="border-y border-zinc-100 py-3">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-medium text-zinc-600">Lock Position</span>
-				<button
-					type="button"
-					class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none {editableData.locked
-						? 'bg-red-500'
-						: 'bg-gray-200'}"
-					onclick={() => {
-						editableData.locked = !editableData.locked;
-					}}
-				>
-					<span class="sr-only">Toggle node lock</span>
-					<span
-						class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out {editableData.locked
-							? 'translate-x-4'
-							: 'translate-x-0'}"
-					></span>
-				</button>
+	{#if templateType === 'time'}
+		<section class="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-4">
+			<div>
+				<h3 class="font-sans text-xs font-semibold text-zinc-900">Countdown</h3>
+				<p class="mt-1 text-[11px] text-zinc-400">Show the event name and time remaining</p>
 			</div>
-		</div>
-
-		<!-- Countdown toggle for timeline event nodes -->
-		{#if templateType === 'time'}
-			<div class="border-b border-zinc-100 pb-3">
-				<div class="flex items-center justify-between">
-					<div>
-						<span class="text-xs font-medium text-zinc-600">Countdown Mode</span>
-						<p class="text-xs text-zinc-400">Show name and countdown timer only</p>
-					</div>
-					<button
-						type="button"
-						class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none {editableData.countdownMode
-							? 'bg-blue-500'
-							: 'bg-gray-200'}"
-						onclick={() => {
-							editableData.countdownMode = !editableData.countdownMode;
-						}}
-					>
-						<span class="sr-only">Toggle countdown mode</span>
-						<span
-							class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out {editableData.countdownMode
-								? 'translate-x-4'
-								: 'translate-x-0'}"
-						></span>
-					</button>
-				</div>
-			</div>
-		{/if}
-
-		{#each customFields as field}
-			<FieldRenderer
-				{field}
-				bind:value={editableData[field.id]}
-				readonly={false}
-				mode="edit"
-				nodeData={editableData}
+			<input
+				type="checkbox"
+				aria-label="Countdown mode"
+				bind:checked={editableData.countdownMode}
+				class="h-4 w-4 accent-blue-600"
 			/>
-		{/each}
+		</section>
+	{/if}
 
-		<!-- Suggested Fields -->
+	{#if customFields.length > 0}
+		<section class="border-b border-zinc-200 px-4 py-4" aria-label="Custom properties">
+			<h3 class="mb-2 font-sans text-xs font-semibold text-zinc-900">Custom properties</h3>
+			<div class="space-y-2.5">
+				{#each customFields as field (field.id)}
+					<FieldRenderer
+						{field}
+						bind:value={editableData[field.id]}
+						readonly={false}
+						mode="edit"
+						nodeData={editableData}
+					/>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
+	<section class="border-b border-zinc-200 px-4 py-4" aria-label="Add properties">
 		{#if availableSuggestedFields.length > 0}
-			<div class="border-t border-zinc-100 pt-3">
-				<h4 class="mb-2 text-xs font-medium text-zinc-500">Suggested Fields</h4>
-				<div class="flex flex-wrap gap-1.5">
-					{#each availableSuggestedFields as suggestedField}
-						<button
-							type="button"
-							onclick={() => addSuggestedField(suggestedField)}
-							class="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 py-0.5 text-xs text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-						>
-							<span>+</span>
-							{suggestedField.label}
-						</button>
-					{/each}
-				</div>
+			<h3 class="mb-2 font-sans text-xs font-semibold text-zinc-900">Add properties</h3>
+			<div class="mb-2.5 flex flex-wrap gap-1.5">
+				{#each availableSuggestedFields as field (field.id)}
+					<button
+						onclick={() => addSuggestedField(field)}
+						class="flex items-center gap-1 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50"
+						><Plus class="h-3 w-3" />{field.label}</button
+					>
+				{/each}
 			</div>
 		{/if}
-
-		<CustomFieldManager bind:customFields bind:nodeData={editableData} />
-
-		<FieldVisibilityManager
-			templateFields={template.fields}
-			bind:customFields
-			bind:nodeData={editableData}
-		/>
-	</div>
+		<div class="[&_h4]:font-sans [&>div]:mt-0 [&>div]:border-0 [&>div]:pt-0">
+			<CustomFieldManager bind:customFields bind:nodeData={editableData} />
+		</div>
+	</section>
+	<section class="border-b border-zinc-200 px-4 py-4" aria-label="Visible on canvas">
+		<div class="[&_h4]:font-sans [&>div]:mt-0 [&>div]:border-0 [&>div]:pt-0">
+			<FieldVisibilityManager
+				templateFields={template.fields}
+				bind:customFields
+				bind:nodeData={editableData}
+			/>
+		</div>
+	</section>
 </div>
 
-<!-- Footer -->
 {#if templateType !== 'project'}
-	<div class="border-t border-zinc-100 p-3">
+	<footer class="shrink-0 border-t border-zinc-200 px-4 py-2">
 		<button
 			onclick={handleDelete}
-			class="w-full rounded border border-borg-orange px-3 py-1.5 text-xs font-medium text-borg-orange transition-colors hover:bg-borg-orange hover:text-white"
+			class="flex items-center gap-2 rounded py-1.5 text-xs text-zinc-500 hover:bg-red-50 hover:text-red-600"
+			><Trash2 class="h-3.5 w-3.5" />Delete node</button
 		>
-			Delete Node
-		</button>
-	</div>
+	</footer>
 {/if}
+
+<style>
+	.inspector-fields :global(label),
+	.inspector-fields :global(.field-container > span:first-child) {
+		font-size: 11px;
+		font-weight: 500;
+		color: #71717a;
+		margin-bottom: 4px;
+	}
+	.inspector-fields :global(input:not([type='checkbox'])),
+	.inspector-fields :global(select),
+	.inspector-fields :global(textarea) {
+		font-size: 12px;
+		padding: 6px 8px;
+		border-color: #e4e4e7;
+		border-radius: 6px;
+		background-color: #fafafa;
+	}
+	.inspector-fields :global(input:focus),
+	.inspector-fields :global(select:focus),
+	.inspector-fields :global(textarea:focus) {
+		border-color: #3b82f6;
+		background-color: white;
+	}
+</style>

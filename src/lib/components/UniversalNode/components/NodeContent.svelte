@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { describeLink, normalizeLinkUrl } from '$lib/features/links/linkNode';
 	import FieldRenderer from '../../fields/FieldRenderer.svelte';
 	import TitleEditor from './TitleEditor.svelte';
 	import type { NodeTemplate, TemplateField } from '../../../templates';
@@ -20,6 +21,22 @@
 		onNodeClick?: () => void;
 		isBeingEdited?: boolean;
 	}>();
+
+	let displayedLinkUrl = $derived(
+		template.id === 'link' && (nodeData.fieldVisibility?.url ?? true)
+			? normalizeLinkUrl(nodeData.url)
+			: ''
+	);
+
+	// Cards lead with content; the editor keeps URL first for pasting a link.
+	let displayFields = $derived(
+		template.id === 'link'
+			? [
+					...template.fields.filter((field: TemplateField) => field.id !== 'url'),
+					...template.fields.filter((field: TemplateField) => field.id === 'url')
+				]
+			: template.fields
+	);
 
 	function handleNodeClick() {
 		if (onNodeClick) {
@@ -49,13 +66,41 @@
 		{/if}
 	{:else}
 		<!-- Normal mode: show all fields -->
-		<div class="mt-2 space-y-3">
-			{#each template.fields as field}
+		<div class={template.id === 'project' ? 'mt-2 space-y-3' : 'space-y-2'}>
+			{#each displayFields as field}
 				{@const isVisible = nodeData.fieldVisibility?.[field.id] ?? field.showInDisplay ?? true}
 				{#if field.id !== 'status' && isVisible}
-					{#if field.id === 'title'}
+					{#if template.id === 'link' && field.id === 'url'}
+						{@const link = describeLink(nodeData.url)}
+						{#if link.url}
+							{@const originalLinkField = (
+								nodeData.customFields as TemplateField[] | undefined
+							)?.find(
+								(customField) =>
+									customField.type === 'link' &&
+									normalizeLinkUrl(nodeData[customField.id]) === link.url
+							)}
+							<FieldRenderer
+								field={{ ...field, label: originalLinkField?.label || link.hostname }}
+								value={link.url}
+								readonly={true}
+								mode="display"
+								{nodeData}
+							/>
+						{:else}
+							<p class="font-sans text-xs text-zinc-400">
+								{nodeData.url ? 'Enter a valid web address' : 'Add a URL in the sidebar'}
+							</p>
+						{/if}
+					{:else if template.id === 'link' && field.id === 'description'}
+						{#if typeof nodeData.description === 'string' && nodeData.description.trim()}
+							<p class="text-sm whitespace-pre-wrap text-zinc-600">{nodeData.description}</p>
+						{/if}
+					{:else if field.id === 'title'}
 						<TitleEditor
-							{nodeData}
+							nodeData={template.id === 'link' && !nodeData.title
+								? { ...nodeData, title: describeLink(nodeData.url).hostname || 'Add a link' }
+								: nodeData}
 							bind:isEditingTitle
 							onSave={onTitleSave}
 							isProjectNode={templateType === 'project'}
@@ -77,7 +122,11 @@
 			{#if nodeData.customFields && Array.isArray(nodeData.customFields)}
 				{#each nodeData.customFields as field}
 					{@const isVisible = field.showInDisplay ?? true}
-					{#if isVisible && field.id !== 'status'}
+					{@const duplicatesPrimaryLink =
+						field.type === 'link' &&
+						displayedLinkUrl &&
+						normalizeLinkUrl(nodeData[field.id]) === displayedLinkUrl}
+					{#if isVisible && field.id !== 'status' && !duplicatesPrimaryLink}
 						{#if field.id === 'title'}
 							<TitleEditor
 								{nodeData}

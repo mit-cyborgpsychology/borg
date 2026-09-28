@@ -1,19 +1,6 @@
 <script lang="ts">
-	import {
-		GitBranch,
-		FileText,
-		Code,
-		Calendar,
-		StickyNote,
-		Link,
-		Square,
-		Sticker,
-		FolderPlus,
-		Image,
-		Monitor,
-		BookOpen
-	} from '@lucide/svelte';
-	import { nodeTemplates } from '../templates';
+	import { Sticker, FolderPlus } from '@lucide/svelte';
+	import { projectsToolbarItems, projectToolbarItems } from './nodeCreationItems';
 
 	let {
 		view = 'projects',
@@ -26,25 +13,6 @@
 		onCreateProject?: () => void;
 		view: 'projects' | 'project';
 	}>();
-
-	const projectsToolbarItems = [
-		{ id: 'note', icon: StickyNote, template: nodeTemplates.note },
-		{ id: 'image', icon: Image, template: nodeTemplates.image },
-		{ id: 'iframe', icon: Monitor, template: nodeTemplates.iframe }
-	];
-
-	const projectToolbarItems = [
-		{ id: 'subproject', icon: GitBranch, template: nodeTemplates.subproject },
-		{ id: 'paper', icon: FileText, template: nodeTemplates.paper },
-		{ id: 'code', icon: Code, template: nodeTemplates.code },
-		{ id: 'time', icon: Calendar, template: nodeTemplates.time },
-		{ id: 'note', icon: StickyNote, template: nodeTemplates.note },
-		{ id: 'image', icon: Image, template: nodeTemplates.image },
-		{ id: 'iframe', icon: Monitor, template: nodeTemplates.iframe },
-		{ id: 'outline', icon: BookOpen, template: nodeTemplates.outline },
-		{ id: 'link', icon: Link, template: nodeTemplates.link },
-		{ id: 'blank', icon: Square, template: nodeTemplates.blank }
-	];
 
 	// Special items (not templates)
 	const specialItems = [
@@ -86,7 +54,7 @@
 	>
 		<!-- New Project button - only show in projects view -->
 		{#if view === 'projects'}
-			{#each projectsSpecialItems as item}
+			{#each projectsSpecialItems as item (item.id)}
 				<button
 					onclick={() => handleSpecialItemClick(item.action)}
 					class="group flex h-8 items-center rounded-md transition-all duration-300 ease-in-out hover:bg-zinc-100 {isToolbarHovered
@@ -107,7 +75,7 @@
 			<div class="my-1 w-full border-t border-zinc-200"></div>
 		{/if}
 
-		{#each view === 'projects' ? projectsToolbarItems : projectToolbarItems as item}
+		{#each view === 'projects' ? projectsToolbarItems : projectToolbarItems as item (item.id)}
 			<button
 				onclick={() => handleItemClick(item.id)}
 				class="group flex h-8 items-center rounded-md transition-all duration-300 ease-in-out hover:bg-zinc-100 {isToolbarHovered
@@ -128,7 +96,7 @@
 
 		<!-- Special items (like stickers) - show in both project and projects view -->
 		<div class="my-1 w-full border-t border-zinc-200"></div>
-		{#each specialItems as item}
+		{#each specialItems as item (item.id)}
 			<button
 				onclick={() => handleSpecialItemClick(item.action)}
 				class="group flex h-8 items-center rounded-md transition-all duration-300 ease-in-out hover:bg-zinc-100 {isToolbarHovered

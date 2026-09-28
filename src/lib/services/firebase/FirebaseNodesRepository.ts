@@ -1,3 +1,4 @@
+import { normalizeLinkNode } from '../../features/links/linkNode';
 import {
 	collection,
 	doc,
@@ -263,8 +264,7 @@ export class FirebaseNodesRepository implements INodesRepository {
 			position: data.position,
 			data: {
 				id,
-				templateType: data.templateType,
-				nodeData: data.nodeData,
+				...normalizeLinkNode(data.templateType, data.nodeData),
 				projectSlug: data.projectSlug
 			},
 			updatedAt: data.updatedAt,

@@ -6,7 +6,7 @@
 	import NoteNode from './NoteNode.svelte';
 	import StickerNode from './StickerNode.svelte';
 	import ImageNode from './ImageNode.svelte';
-	import IframeNode from './IframeNode.svelte';
+	import LinkEmbed from './LinkEmbed.svelte';
 	import OutlineNode from './OutlineNode.svelte';
 	import NodeHeader from './components/NodeHeader.svelte';
 	import NodeContent from './components/NodeContent.svelte';
@@ -111,9 +111,9 @@
 {:else if template.id === 'image'}
 	<!-- Delegate entirely to ImageNode for image types -->
 	<ImageNode {data} {id} {isBeingEdited} />
-{:else if template.id === 'iframe'}
-	<!-- Delegate entirely to IframeNode for iframe types -->
-	<IframeNode {data} {id} {isBeingEdited} />
+{:else if template.id === 'link' && nodeData.viewMode === 'Iframe'}
+	<!-- Link nodes share data across their card and embedded views. -->
+	<LinkEmbed {data} {id} {isBeingEdited} />
 {:else if template.id === 'outline'}
 	<!-- Delegate entirely to OutlineNode for outline doc types -->
 	<OutlineNode {data} {id} {isBeingEdited} />
@@ -149,7 +149,7 @@
 					: 'white'}; opacity: {nodeOpacity};"
 		>
 			<!-- Non-Project Node Header (inside the node box) -->
-			{#if template.id !== 'note' && template.id !== 'project' && template.id !== 'blank'}
+			{#if template.id !== 'note' && template.id !== 'project'}
 				<NodeHeader
 					{template}
 					templateType={data.templateType}
@@ -160,7 +160,7 @@
 				/>
 			{/if}
 
-			<div class={template.id === 'note' ? '' : template.id === 'project' ? 'p-3' : 'p-3 pt-0'}>
+			<div class={template.id === 'note' ? '' : template.id === 'project' ? 'p-3' : 'px-3 py-2.5'}>
 				<!-- Node Content -->
 				<NodeContent
 					{template}

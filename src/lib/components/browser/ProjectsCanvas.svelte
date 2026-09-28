@@ -1,4 +1,17 @@
 <script lang="ts">
+	import NodeCreationMenu from '$lib/components/NodeCreationMenu.svelte';
+	let creationMenu = $state<{ x: number; y: number } | null>(null);
+	function openCreationMenu({ event }: { event: MouseEvent }) {
+		event.preventDefault();
+		creationMenu = { x: event.clientX, y: event.clientY };
+	}
+	async function createFromMenu(type: string, position: { x: number; y: number }) {
+		if (!nodesService) return false;
+		const result = await editCommand.run(() => nodesService.addNode(type, position));
+		if (!result.ok)
+			throw new Error($editCommand.error || 'Could not create node. Please try again.');
+		return true;
+	}
 	import { createCommand } from '$lib/state/command';
 	import { onDestroy } from 'svelte';
 	const editCommand = createCommand({ queue: true });
@@ -456,7 +469,6 @@
 		console.log('ProjectsCanvas.handleEditPanelSave called:', { nodeId, data });
 		const result = await editCommand.run(() => nodesService.updateNode(nodeId, data));
 		if (!result.ok) return;
-		showEditPanel = false;
 	}
 
 	async function handleEditPanelDelete(nodeId: string) {
@@ -855,6 +867,7 @@
 				{/if}
 
 				<SvelteFlow
+					onpanecontextmenu={openCreationMenu}
 					class="h-full w-full bg-black"
 					bind:nodes={workingNodes}
 					bind:edges={canvasEdges}
@@ -879,6 +892,17 @@
 					zoomOnScroll={false}
 					zoomOnPinch={true}
 				>
+					{#if creationMenu}
+						{#key creationMenu}
+							<NodeCreationMenu
+								{onCreateProject}
+								position={creationMenu}
+								view="projects"
+								onCreate={createFromMenu}
+								onClose={() => (creationMenu = null)}
+							/>
+						{/key}
+					{/if}
 					<Background />
 					<Controls />
 					<Panel position="bottom-right">
@@ -898,14 +922,26 @@
 
 		<!-- Edit Sidebar -->
 		{#if showEditPanel}
-			<EditPanel
-				error={$editCommand.error}
-				nodeId={editNodeId}
-				nodeData={editNodeData}
-				templateType={editTemplateType}
-				onSave={handleEditPanelSave}
-				onDelete={handleEditPanelDelete}
-			/>
+			<aside
+				aria-label="Node inspector"
+				class="flex h-full min-h-0 w-80 max-w-[85vw] shrink-0 flex-col overflow-hidden border-l border-zinc-200 bg-white"
+			>
+				<div class="flex h-11 shrink-0 items-center justify-between border-b border-zinc-200 px-4">
+					<span class="font-sans text-xs font-semibold text-zinc-900">Node properties</span><button
+						onclick={() => (showEditPanel = false)}
+						aria-label="Close inspector"
+						class="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100">Close</button
+					>
+				</div>
+				<EditPanel
+					error={$editCommand.error}
+					nodeId={editNodeId}
+					nodeData={editNodeData}
+					templateType={editTemplateType}
+					onSave={handleEditPanelSave}
+					onDelete={handleEditPanelDelete}
+				/>
+			</aside>
 		{/if}
 
 		<!-- Sticker Panel -->

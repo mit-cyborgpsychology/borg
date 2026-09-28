@@ -1,3 +1,4 @@
+import { canonicalNodeType } from '../features/links/linkNode.ts';
 import { getTemplate } from '../templates.ts';
 import type { INodesService, IProjectsService, ITaskService } from './interfaces';
 import type { INodesRepository } from './interfaces/INodesRepository';
@@ -13,6 +14,7 @@ export function createNodeService(
 ): INodesService {
 	return {
 		async addNode(templateType, position) {
+			templateType = canonicalNodeType(templateType);
 			const template = getTemplate(templateType);
 			if (!template) throw new Error(`Unknown node template: ${templateType}`);
 			if (!Number.isFinite(position.x) || !Number.isFinite(position.y))
@@ -24,7 +26,7 @@ export function createNodeService(
 						? []
 						: templateType === 'note' && field.type === 'select' && field.id === 'size'
 							? 'Small'
-							: '';
+							: (field.defaultValue ?? '');
 			}
 			if (templateType === 'time') fields.countdownMode = true;
 			return repository.createNode(

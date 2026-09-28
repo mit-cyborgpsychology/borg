@@ -1,17 +1,6 @@
 <script lang="ts">
 	import { nodeTemplates } from '../templates';
-	import {
-		FolderOpen,
-		GitBranch,
-		FileText,
-		Code,
-		Calendar,
-		StickyNote,
-		Link,
-		Square,
-		Image,
-		Monitor
-	} from '@lucide/svelte';
+	import { FolderOpen, GitBranch, Calendar, StickyNote, Link, Square, Image } from '@lucide/svelte';
 
 	let {
 		position,
@@ -55,10 +44,6 @@
 				return FolderOpen;
 			case 'subproject':
 				return GitBranch;
-			case 'paper':
-				return FileText;
-			case 'code':
-				return Code;
 			case 'time':
 				return Calendar;
 			case 'note':
@@ -69,8 +54,6 @@
 				return Square;
 			case 'image':
 				return Image;
-			case 'iframe':
-				return Monitor;
 			default:
 				return Square;
 		}

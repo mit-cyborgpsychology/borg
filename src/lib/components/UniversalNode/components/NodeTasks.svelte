@@ -19,7 +19,7 @@
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="relative max-w-64 min-w-48 cursor-pointer rounded-b-lg border border-t-0 bg-borg-brown p-2 transition-colors hover:bg-borg-beige"
+			class="relative max-w-64 min-w-48 cursor-pointer rounded-b-lg border border-t-0 bg-zinc-50 p-2 transition-colors hover:bg-zinc-100"
 			style="border-color: {borderColor};"
 			onclick={onTaskClick}
 		>
@@ -46,7 +46,7 @@
 				event.stopPropagation();
 				onAddTaskClick();
 			}}
-			class="absolute -right-2 -bottom-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-200 bg-black text-white transition-colors hover:bg-borg-orange hover:text-black"
+			class="absolute -right-2 -bottom-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
 			title="Add Task"
 		>
 			<ListTodo class="h-3 w-3" />

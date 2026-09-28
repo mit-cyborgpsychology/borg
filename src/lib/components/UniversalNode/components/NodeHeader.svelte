@@ -14,6 +14,7 @@
 		Lock,
 		Unlock
 	} from '@lucide/svelte';
+	import { describeLink } from '$lib/features/links/linkNode';
 	import type { NodeTemplate } from '../../../templates';
 
 	let { template, templateType, nodeData, id, data, onDelete } = $props<{
@@ -34,7 +35,8 @@
 
 	// Determine node type icon with status-based color
 	let statusIcon = $derived.by(() => {
-		const currentTemplateType = templateType || template.id;
+		const currentTemplateType =
+			template.id === 'link' ? describeLink(nodeData.url).kind : templateType || template.id;
 		const status = nodeData.status;
 
 		// Hide icon for project nodes
@@ -48,6 +50,7 @@
 			case 'subproject':
 				component = GitBranch;
 				break;
+			case 'document':
 			case 'paper':
 				component = FileText;
 				break;
@@ -60,6 +63,9 @@
 			case 'note':
 				component = StickyNote;
 				break;
+			case 'website':
+			case 'video':
+			case 'design':
 			case 'link':
 				component = Link;
 				break;
@@ -75,7 +81,7 @@
 		let color;
 		if (status === 'Done')
 			color = '#16a34a'; // green-600
-		else color = '#374151'; // gray-700 - default
+		else color = '#71717a'; // gray-700 - default
 
 		return { component, color };
 	});
@@ -154,28 +160,32 @@
 		{/if}
 	</div>
 {:else if template.id !== 'note'}
-	<!-- Regular node header (appears inside the main node box) -->
-	<div class="flex items-center justify-between p-3 pb-0">
-		<div class="flex items-center gap-2">
+	<!-- Compact window-style metadata and controls. -->
+	<div
+		class="flex h-7 items-center justify-between gap-3 rounded-t-lg border-b border-zinc-100 bg-zinc-50/70 px-2.5"
+	>
+		<div class="flex min-w-0 items-center gap-1.5">
 			{#if statusIcon}
 				{@const StatusIconComponent = statusIcon.component}
-				<StatusIconComponent class="h-5 w-5" style="color: {statusIcon.color};" />
+				<StatusIconComponent class="h-3 w-3 shrink-0" style="color: {statusIcon.color};" />
 			{/if}
-			<span class="bg-white text-sm font-medium">{template.name}</span>
+			<span class="truncate text-[10px] font-medium text-zinc-500"
+				>{template.id === 'link' ? describeLink(nodeData.url).label : template.name}</span
+			>
 		</div>
 
-		<div class="-mt-2 -mr-1 flex items-center gap-1">
+		<div class="nodrag flex shrink-0 items-center gap-0.5">
 			<button
 				onclick={handleDelete}
 				aria-label="Delete node"
-				class="rounded p-0.5 text-zinc-700 opacity-0 transition-opacity group-hover:opacity-100 hover:text-borg-orange"
+				class="flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-zinc-200/60 hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-zinc-400"
 			>
 				<Trash2 class="h-3 w-3" />
 			</button>
 			<button
 				onclick={toggleLock}
 				aria-label={nodeData.locked ? 'Unlock node' : 'Lock node'}
-				class="p-0.5 text-zinc-700 hover:text-borg-orange"
+				class="flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-zinc-200/60 hover:text-zinc-700 focus-visible:outline-2 focus-visible:outline-zinc-400"
 				title={nodeData.locked ? 'Click to unlock node' : 'Click to lock node'}
 			>
 				{#if nodeData.locked}
