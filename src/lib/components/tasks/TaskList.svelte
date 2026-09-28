@@ -69,8 +69,17 @@
 	}
 </script>
 
-<div class="nodrag nopan space-y-1">
-	{#each visible as task (task.id)}
+{#snippet taskCard(task: Task)}
+	{#if editingTask?.id === task.id}
+		<TaskEditor
+			{task}
+			{nodeId}
+			{projectSlug}
+			inline
+			onClose={() => (editingTask = null)}
+			onTaskUpdated={() => void onTasksUpdated?.()}
+		/>
+	{:else}
 		<TaskRow
 			{task}
 			{compact}
@@ -80,6 +89,12 @@
 			onEdit={() => edit(task)}
 			onDelete={() => void remove(task)}
 		/>
+	{/if}
+{/snippet}
+
+<div class="nodrag nopan space-y-1">
+	{#each visible as task (task.id)}
+		{@render taskCard(task)}
 	{/each}
 	{#if active.length > visible.length && onShowAll}
 		<button
@@ -118,26 +133,8 @@
 		</button>
 		{#if showCompleted}
 			{#each completed as task (task.id)}
-				<TaskRow
-					{task}
-					{compact}
-					pending={pendingId === task.id}
-					disabled={busy}
-					onToggle={() => void toggle(task)}
-					onEdit={() => edit(task)}
-					onDelete={() => void remove(task)}
-				/>
+				{@render taskCard(task)}
 			{/each}
 		{/if}
 	{/if}
 </div>
-
-{#if editingTask}
-	{#key editingTask.id}<TaskEditor
-			task={editingTask}
-			{nodeId}
-			{projectSlug}
-			onClose={() => (editingTask = null)}
-			onTaskUpdated={() => void onTasksUpdated?.()}
-		/>{/key}
-{/if}

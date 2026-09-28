@@ -103,6 +103,11 @@
 			</div>
 		{/if}
 	</div>
+	{#if compact && person}
+		<div class="flex h-7 shrink-0 items-center pr-1">
+			<PersonAvatar name={person.name || 'Assignee'} photoUrl={person.photoUrl} size="tiny" />
+		</div>
+	{/if}
 	{#if onDelete && !compact}
 		<button
 			type="button"

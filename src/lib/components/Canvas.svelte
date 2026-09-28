@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ProjectAssistant from './assistant/ProjectAssistant.svelte';
 	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
 	let deleteDialog: ConfirmDeleteDialog;
 	import { getTemplate } from '$lib/templates';
@@ -78,7 +79,7 @@
 		nextMatch as goToNextMatch,
 		previousMatch as goToPreviousMatch
 	} from '../utils/canvasSearch';
-	import { ChevronRight, ChevronLeft } from '@lucide/svelte';
+	import { ChevronRight, PanelRight, Bot } from '@lucide/svelte';
 	import { ProjectStore } from '../stores/ProjectStore.svelte';
 	import { setProjectStoreContext } from '../stores/projectStoreContext';
 	import '@xyflow/svelte/dist/style.css';
@@ -156,6 +157,7 @@
 	let taskEditorTask = $state<Task | undefined>(undefined); // undefined for add mode, Task for edit mode
 
 	// Right sidebar toggle state
+	let assistantOpen = $state(false);
 	let showRightSidebar = $state(true);
 	let sidebarTab = $state<'nodes' | 'tasks' | 'stickers'>('nodes');
 
@@ -404,6 +406,7 @@
 		void editCommand.run(() => nodesService.updateNode(payload.nodeId, payload.data));
 	};
 	const handleNodeEditEvent = (payload: CanvasPayloads['nodeEdit']) => {
+		assistantOpen = false;
 		showRightSidebar = true;
 		sidebarTab = 'nodes';
 		editNodeId = payload.nodeId;
@@ -424,6 +427,7 @@
 		taskSidebarNodeTitle = payload.nodeTitle;
 		showNodeTaskSidebar = true;
 		showTaskEditor = false;
+		assistantOpen = false;
 		showRightSidebar = true;
 		sidebarTab = 'tasks';
 		// Notify parent to close other panels
@@ -437,6 +441,7 @@
 		taskEditorNodeId = payload.nodeId;
 		taskEditorTask = undefined; // undefined = add mode
 		showTaskEditor = true;
+		assistantOpen = false;
 		showRightSidebar = true;
 		sidebarTab = 'tasks';
 	};
@@ -455,6 +460,7 @@
 			taskEditorNodeId = nodeId;
 			taskEditorTask = task;
 			showTaskEditor = true;
+			assistantOpen = false;
 			showRightSidebar = true;
 			sidebarTab = 'tasks';
 		},
@@ -608,6 +614,7 @@
 	}
 
 	function handleShowStickers() {
+		assistantOpen = false;
 		showRightSidebar = true;
 		sidebarTab = 'stickers';
 		showEditPanel = false;
@@ -1007,7 +1014,7 @@
 <!-- Canvas and Sidebar Container -->
 <div class="flex h-full w-full">
 	<!-- Canvas -->
-	<div class="relative flex-1">
+	<div class="relative min-w-0 flex-1">
 		<StatusOverlay>
 			<AsyncStatus
 				state={{ status: projectStore.status, error: projectStore.error }}
@@ -1135,20 +1142,12 @@
 	</div>
 
 	<!-- Right Sidebar -->
-	<div class="relative h-full shrink-0 {showRightSidebar ? 'w-80 max-w-[85vw]' : 'w-0'}">
-		<button
-			type="button"
-			onclick={() => (showRightSidebar = !showRightSidebar)}
-			aria-label={showRightSidebar ? 'Collapse sidebar' : 'Expand sidebar'}
-			aria-expanded={showRightSidebar}
-			title={showRightSidebar ? 'Collapse sidebar' : 'Expand sidebar'}
-			class="absolute top-1/2 right-full z-50 flex h-10 w-5 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-zinc-200 bg-white text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600 focus-visible:outline-2 focus-visible:outline-zinc-400"
-		>
-			{#if showRightSidebar}<ChevronRight class="h-3 w-3" />{:else}<ChevronLeft
-					class="h-3 w-3"
-				/>{/if}
-		</button>
-		{#if showRightSidebar}
+	<div
+		class="relative h-full shrink-0 {showRightSidebar && !assistantOpen
+			? 'w-80 max-w-[85vw]'
+			: 'w-0'}"
+	>
+		{#if showRightSidebar && !assistantOpen}
 			<div
 				role="complementary"
 				aria-label="Project sidebar"
@@ -1353,6 +1352,61 @@
 					</div>
 				{/if}
 			</div>
+		{/if}
+	</div>
+	{#if projectSlug && $authStore.user}
+		{#key `${projectSlug}:${$authStore.user.uid}`}<ProjectAssistant
+				bind:open={assistantOpen}
+				{projectSlug}
+				onOpenNode={async (nodeId) => {
+					const node =
+						nodes.find((n) => n.id === nodeId) ||
+						(await nodesService.getNodes()).find((n) => n.id === nodeId);
+					if (node) focusNode(node);
+				}}
+				onOpenTasks={(nodeId) => {
+					const node = nodes.find((n) => n.id === nodeId);
+					handleNodeTasksOpenEvent({ nodeId, nodeTitle: node ? getNodeLabel(node) : 'Tasks' });
+				}}
+				selectedNodes={nodes
+					.filter((node) => node.selected)
+					.map((node) => ({
+						id: node.id,
+						title: getNodeLabel(node)
+					}))}
+			/>{/key}
+	{/if}
+	<div
+		role="group"
+		aria-label="Canvas panels"
+		class="flex h-full w-11 shrink-0 flex-col items-center gap-2 border-l border-zinc-200 bg-borg-white py-3"
+	>
+		<button
+			type="button"
+			aria-label="Project sidebar"
+			title="Project sidebar"
+			aria-pressed={showRightSidebar && !assistantOpen}
+			onclick={() => {
+				const wasOpen = showRightSidebar && !assistantOpen;
+				assistantOpen = false;
+				showRightSidebar = !wasOpen;
+			}}
+			class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-zinc-500 hover:bg-borg-beige hover:text-zinc-900 aria-pressed:bg-borg-beige aria-pressed:text-zinc-900"
+			><PanelRight class="h-4 w-4" /></button
+		>
+		{#if projectSlug && $authStore.user}
+			<button
+				type="button"
+				aria-label="Assistant"
+				title="Assistant"
+				aria-pressed={assistantOpen}
+				onclick={() => {
+					assistantOpen = !assistantOpen;
+					showRightSidebar = false;
+				}}
+				class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-zinc-500 hover:bg-borg-beige hover:text-zinc-900 aria-pressed:bg-borg-beige aria-pressed:text-zinc-900"
+				><Bot class="h-4 w-4" /></button
+			>
 		{/if}
 	</div>
 </div>

@@ -1,3 +1,4 @@
+import type { IAssistantService } from '../services/interfaces/IAssistantService';
 import type { Readable } from 'svelte/store';
 import type { AuthState } from '../stores/authStore';
 import type { IAuthService } from '../services/interfaces/IAuthService';
@@ -19,6 +20,7 @@ import type { createTaskContext } from '../services/taskContext';
 import type { IResearchService } from '../services/interfaces/IResearchService';
 
 export interface AppServices {
+	assistantService: IAssistantService;
 	presenceService: IPresenceService;
 	authService: IAuthService;
 	authStore: Readable<AuthState>;

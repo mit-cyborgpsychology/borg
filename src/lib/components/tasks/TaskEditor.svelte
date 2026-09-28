@@ -13,6 +13,7 @@
 	const inputId = $props.id();
 	interface Props {
 		nodeId: string;
+		inline?: boolean;
 		projectSlug?: string;
 		task?: Task | undefined; // If provided, this is edit mode; if not, this is add mode
 		onClose: () => void;
@@ -20,7 +21,15 @@
 		onTaskAdded?: () => void;
 	}
 
-	let { nodeId, projectSlug, task, onClose, onTaskUpdated, onTaskAdded }: Props = $props();
+	let {
+		nodeId,
+		projectSlug,
+		task,
+		onClose,
+		onTaskUpdated,
+		onTaskAdded,
+		inline = false
+	}: Props = $props();
 	const feature = createTaskFormState(peopleService, taskService);
 	const peopleResource = feature.people;
 	const command = feature.command;
@@ -86,9 +95,9 @@
 	}}
 	bind:this={editor}
 	aria-label={editorTitle}
-	class="nodrag nopan rounded-lg border border-zinc-200 bg-white p-4"
+	class="nodrag nopan rounded-lg border border-zinc-200 bg-white {inline ? 'p-3' : 'p-4'}"
 >
-	<form onsubmit={handleSubmit} class="space-y-4">
+	<form onsubmit={handleSubmit} class={inline ? 'space-y-3' : 'space-y-4'}>
 		<div class="flex items-center justify-between gap-2">
 			<span class="font-sans text-xs font-semibold text-zinc-500">{editorTitle}</span>
 			<button
@@ -108,7 +117,9 @@
 			placeholder="What needs to be done?"
 			disabled={isLoading}
 			required
-			class="w-full border-0 bg-transparent font-sans text-xl font-semibold text-zinc-800 placeholder:text-zinc-300 focus:outline-none"
+			class="w-full border-0 bg-transparent font-sans {inline
+				? 'text-sm'
+				: 'text-xl'} font-semibold text-zinc-800 placeholder:text-zinc-300 focus:outline-none"
 		/>
 
 		<div class="flex flex-wrap items-start gap-4">

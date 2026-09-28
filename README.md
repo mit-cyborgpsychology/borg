@@ -164,3 +164,30 @@ The note opens in an embedded Outline editor with an external-tab fallback.
 Document content stays in Outline; Borg refreshes its title and link metadata.
 See [Outline integration setup](deploy/outline/README.md) for configuration,
 creation recovery, and iframe deployment.
+
+### Project assistant
+
+Open **Assistant** at the bottom right of a project canvas. The first version uses
+GPT-6 Luna to read the current project, nodes, people, and tasks, and create up to
+five tasks, five nodes, and ten connections per message. Supported node types are
+notes, blank cards, and links; new nodes are placed beside the existing canvas. Select nodes to attach them as context;
+remove a context chip to exclude it from the selection. Task result buttons open
+that node's task sidebar; node result buttons focus the new node. Chat history is stored locally per user and project;
+**New chat** clears the current history. Stop cancels further generation; tasks
+already created are kept.
+
+Server-only configuration:
+
+- `BORG_ASSISTANT_API_KEY`: OpenAI API key.
+- `BORG_ASSISTANT_MODEL`: defaults to `gpt-6-luna`.
+
+Set these in Cloudflare Pages secrets and redeploy for production. Never expose
+these values through `VITE_` variables. The endpoint verifies Firebase identity,
+account approval, and project access. Firestore reads and writes use the caller's
+ID token and security rules, not a service account. Task IDs deduplicate identical
+creations within a user turn, including request retries.
+
+The preview does not edit/delete existing tasks or nodes, search References,
+or read/edit Wiki content. Context currently includes at most 100 nodes (selected
+nodes first, up to 2,000 characters each) 200 tasks, and 200 connections; tool results flag truncated
+collections. Conversations are not yet synced across devices.
