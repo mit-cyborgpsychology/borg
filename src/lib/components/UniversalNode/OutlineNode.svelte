@@ -243,14 +243,7 @@
 		{#if embeddedDoc}
 			<div class="overflow-hidden rounded-lg" style:height={`${height}px`}>
 				<OutlineEditor {height} {resizing} doc={embeddedDoc} onclose={() => void refreshDoc()}>
-					{#snippet controls(expanded)}
-						<button
-							type="button"
-							disabled={isCreating}
-							onclick={chooseExisting}
-							title="Change linked note"
-							aria-label="Change linked note"><FileText class="h-3 w-3" /></button
-						>
+					{#snippet topControls()}
 						<button type="button" onclick={handleEdit} title="Edit node" aria-label="Edit node"
 							><Edit class="h-3 w-3" /></button
 						>
@@ -259,6 +252,15 @@
 							onclick={handleDelete}
 							title="Delete wiki node"
 							aria-label="Delete wiki node"><Trash2 class="h-3 w-3" /></button
+						>
+					{/snippet}
+					{#snippet controls(expanded)}
+						<button
+							type="button"
+							disabled={isCreating}
+							onclick={chooseExisting}
+							title="Change linked note"
+							aria-label="Change linked note"><FileText class="h-3 w-3" /></button
 						>
 						{#if !expanded}<button
 								type="button"

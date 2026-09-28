@@ -23,3 +23,9 @@ body {
 	font-family: 'Google Sans Code', 'Roboto Mono', 'Courier', monospace;
 	cursor: default;
 }
+
+/* Keep mouse movement and release in the canvas while dragging any node,
+   including when the pointer crosses another node's embedded document. */
+.svelte-flow:has(.svelte-flow__node.dragging) iframe {
+	pointer-events: none !important;
+}

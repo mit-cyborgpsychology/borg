@@ -6,12 +6,14 @@
 		onclose,
 		doc,
 		controls,
+		topControls,
 		height = 480,
 		resizing = false
 	}: {
 		onclose: () => void;
 		doc: OutlineDoc;
 		controls?: Snippet<[boolean]>;
+		topControls?: Snippet;
 		height?: number;
 		resizing?: boolean;
 	} = $props();
@@ -46,6 +48,15 @@
 >
 	{#if doc}
 		<div class="flex h-full flex-col">
+			<header
+				class="flex h-8 shrink-0 items-center justify-end rounded-t-lg border-b border-zinc-200 bg-zinc-50 px-2"
+				class:cursor-grab={!expanded}
+				title={expanded ? undefined : 'Drag to move wiki node'}
+			>
+				<div class="nodrag nopan flex items-center gap-2 text-zinc-500">
+					{@render topControls?.()}
+				</div>
+			</header>
 			{#key generation}<iframe
 					title={doc.title}
 					src={doc.url}
